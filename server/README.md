@@ -78,6 +78,22 @@ curl http://127.0.0.1:8000/api/v2/health
 curl http://127.0.0.1:8000/api/v2/health/ready
 ```
 
+`/api/v2/health` and `/api/v2/health/live` report process liveness. Use
+`/api/v2/health/ready` for availability monitoring and traffic admission: it
+checks the database schema, Redis coordination operations, and the Timeline
+subscription. A running process can return liveness 200 while readiness and
+Connector admission return 503.
+
+When Redis is configured, readiness probes both the lifecycle-lock and presence
+namespaces with unique temporary keys, using the application's Redis client. It
+claims each key with `SET NX PX`, renews it with the production ownership-checking
+Lua script, then releases it with that script. The Redis check, including PING,
+has a two-second total timeout. Keys expire after five seconds if interrupted.
+This detects write/ACL failures that PING alone misses; it does not validate
+every Redis-backed feature or cross-instance RPC delivery. Probe failures log
+the namespace, operation, and exception type; Connector admission failures log
+the request path and admission stage without tokens or raw Redis errors.
+
 ## Environment
 
 | Variable | Purpose |

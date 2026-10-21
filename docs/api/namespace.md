@@ -64,6 +64,14 @@ Do not store `/api/v2` in `serverUrl`.
 
 Connector health probes use `/api/v2/health`.
 
+`GET /api/v2/health` and `/api/v2/health/live` report process liveness, not
+Connector availability. Availability monitors and traffic admission should use
+`GET /api/v2/health/ready`: it returns 503 when the database schema, configured
+Redis coordination primitives, or Timeline subscription are unavailable. Redis
+readiness checks temporary lifecycle-lock and presence keys through claim,
+ownership-checked renewal, and release; PING success alone is insufficient.
+The response retains the existing `checks.redis.status` and `message` fields.
+
 Server-generated connector URLs, such as file transfer `uploadUrl` and runtime attachment `downloadUrl`, are also returned with `/api/v2` included. Connector URL helpers are idempotent for already-prefixed paths.
 
 ## Compatibility Rule

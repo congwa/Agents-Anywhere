@@ -156,6 +156,48 @@ class RedisCoordinator:
             return
         await asyncio.wait_for(self._client.ping(), timeout=timeout_seconds)
 
+    async def check_coordination(self) -> None:
+        """Exercise admission primitives; the caller bounds the total duration.
+
+        Use unique keys in both production admission namespaces. Failed or
+        cancelled probes leave only short-lived keys; no cleanup command may
+        mask the original failure or outlive the caller's timeout.
+        """
+        if self._client is None:
+            return
+        token = secrets.token_urlsafe(16)
+        probe_id = f"readiness_{secrets.token_hex(16)}"
+        keys = (
+            ("lifecycle_lock", self.key("lock", f"connector-lifecycle:{probe_id}")),
+            ("presence", self.key("connector", "presence", probe_id)),
+        )
+        for namespace, key in keys:
+            operation = "claim"
+            try:
+                if not await self.claim(key, token, ttl_seconds=5):
+                    raise RuntimeError("probe key already exists")
+                operation = "renew"
+                if not await self.refresh_if_value(key, token, ttl_seconds=5):
+                    raise RuntimeError("probe ownership was lost")
+                operation = "release"
+                if not await self.delete_if_value(key, token):
+                    raise RuntimeError("probe ownership was lost")
+            except (Exception, asyncio.CancelledError) as exc:
+                logger.bind(
+                    namespace=namespace,
+                    operation=operation,
+                    error_type=type(exc).__name__,
+                ).warning(
+                    "Redis coordination probe failed namespace={} operation={} error_type={}",
+                    namespace, operation, type(exc).__name__,
+                )
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                raise RuntimeError(
+                    f"Redis coordination probe failed at {namespace}.{operation} "
+                    f"({type(exc).__name__})"
+                ) from exc
+
     async def server_epoch(self) -> str:
         """Return the Redis process identity used to detect stale AOF recovery."""
 

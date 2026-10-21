@@ -300,7 +300,13 @@ def create_app(
     async def coordination_unavailable(
         _request: Request, exc: RedisError
     ) -> JSONResponse:
-        logger.error("redis coordination unavailable: {}", exc)
+        stage = getattr(_request.state, "coordination_stage", "unspecified")
+        logger.bind(
+            path=_request.url.path, stage=stage, error_type=type(exc).__name__,
+        ).error(
+            "Redis coordination unavailable path={} stage={} error_type={}",
+            _request.url.path, stage, type(exc).__name__,
+        )
         return JSONResponse(
             status_code=503,
             content={
@@ -336,11 +342,18 @@ def create_app(
             checks["database"] = {"status": "error", "message": str(exc)}
         if app.state.redis.distributed:
             try:
-                await app.state.redis.ping(timeout_seconds=2)
+                async with asyncio.timeout(2):
+                    await app.state.redis.ping(timeout_seconds=2)
+                    await app.state.redis.check_coordination()
                 checks["redis"] = {"status": "ok"}
             except Exception as exc:  # readiness must report dependency failures
                 ready = False
-                checks["redis"] = {"status": "error", "message": str(exc)}
+                message = (
+                    "Redis coordination check timed out"
+                    if isinstance(exc, TimeoutError) else str(exc)
+                )
+                checks["redis"] = {"status": "error", "message": message}
+                logger.warning("Redis readiness failed error_type={}", type(exc).__name__)
         else:
             checks["redis"] = {"status": "not_configured"}
         if app.state.timeline_broker.healthy:

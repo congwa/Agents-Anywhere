@@ -533,9 +533,13 @@ async def connector_ws(
     runtime_service: DeviceRuntimeService = websocket.app.state.device_runtime_service
     try:
         connector_id = _access_token_connector_id(auth_header)
+        websocket.state.coordination_stage = "lifecycle_lock"
         async with db.connector_lifecycle(connector_id):
+            websocket.state.coordination_stage = "authenticate"
             await _require_active_connector(auth_header, db)
+            websocket.state.coordination_stage = "claim_lease"
             connection = await manager.register(connector_id, websocket, ready=False)
+            websocket.state.coordination_stage = "initialize"
             ingest_service = ConnectorIngestService(
                 db, ConnectorNotificationService(
                     db, realtime, timeline_write_buffer,
@@ -565,12 +569,14 @@ async def connector_ws(
                     return
                 await db.record_connector_activity(connector_id)
                 await websocket.accept()
+                websocket.state.coordination_stage = "mark_ready"
                 if not await manager.mark_ready(connection):
                     await websocket.close(code=4409, reason="connector ownership was lost")
                     return
             finally:
                 if not connection.ready:
                     await manager.unregister(connector_id, connection)
+            websocket.state.coordination_stage = "release_lifecycle_lock"
     except HTTPException:
         await websocket.close(code=1008, reason="invalid connector access token")
         return
