@@ -6,7 +6,7 @@ import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi import WebSocket
 from loguru import logger
@@ -28,6 +28,28 @@ class ConnectorRpcError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+class ConnectorRequestTransport(Protocol):
+    def supports(self, method: str) -> bool: ...
+
+    async def request_bound(
+        self,
+        connector_id: str,
+        method: str,
+        params: dict[str, Any],
+        *,
+        timeout: float,
+    ) -> tuple[Any, str]: ...
+
+    async def request_on_connection(
+        self,
+        connection: ConnectorConnection,
+        method: str,
+        params: dict[str, Any],
+        *,
+        timeout: float,
+    ) -> Any: ...
 
 
 @dataclass
@@ -65,6 +87,12 @@ class ConnectorRpcManager:
         self._clock = clock
         self._pubsub = None
         self._listener_task: asyncio.Task[None] | None = None
+        self._request_transport: ConnectorRequestTransport | None = None
+
+    def bind_request_transport(self, transport: ConnectorRequestTransport) -> None:
+        """Route supported business requests through the configured transport."""
+
+        self._request_transport = transport
 
     def lifecycle_guard(self, connector_id: str):
         """Serialize rare credential/deletion transitions with HTTP admission."""
@@ -383,6 +411,16 @@ class ConnectorRpcManager:
         *,
         timeout: float = 30,
     ) -> tuple[Any, str]:
+        if (
+            self._request_transport is not None
+            and self._request_transport.supports(method)
+        ):
+            return await self._request_transport.request_bound(
+                connector_id,
+                method,
+                params,
+                timeout=timeout,
+            )
         connection = self._connections.get(connector_id)
         if connection is not None and self._is_local_online(connection):
             result = await self._request_local(
@@ -420,6 +458,16 @@ class ConnectorRpcManager:
     ) -> Any:
         if self._connections.get(connection.connector_id) is not connection:
             raise ConnectorOfflineError("connector connection was replaced")
+        if (
+            self._request_transport is not None
+            and self._request_transport.supports(method)
+        ):
+            return await self._request_transport.request_on_connection(
+                connection,
+                method,
+                params,
+                timeout=timeout,
+            )
         return await self._request_local(
             connection,
             method,

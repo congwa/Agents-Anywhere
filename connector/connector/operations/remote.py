@@ -21,6 +21,7 @@ from connector.runtime_protocol import (
     RuntimeScope,
     RuntimeUnavailableError,
 )
+from connector.server.mesh_services import bind_control_services
 from connector.server.sync_state import JsonSyncStateStore
 from connector.server.urls import is_loopback_url
 
@@ -155,8 +156,21 @@ class RemoteOperations:
                     asyncio.get_running_loop(),
                     self.source,
                 )
+                services = info.get("services")
+                if not isinstance(services, dict):
+                    raise TypeError("MeshCall bootstrap is missing domain services")
+                control_services = bind_control_services(
+                    {str(key): str(value) for key, value in services.items()},
+                    backend._dispatcher.dispatch,
+                    asyncio.get_running_loop(),
+                )
                 mesh = Mesh(Router(url), token=info["token"])
-                mesh.mount(service, instance_id=info["instanceId"], max_inflight=16)
+                mesh.mount(
+                    service,
+                    *control_services,
+                    instance_id=info["instanceId"],
+                    max_inflight=32,
+                )
                 async with mesh.serve(access_log=False, drain_timeout=0):
                     # Introspection detects a Router restart even when the existing
                     # service driver is trying to reconnect with a now-invalid token.

@@ -114,7 +114,9 @@ Server 应通过 `uv run python -m agent_server.main` 启动，或使用仓库�
 创建接口将返回通道不可用。Router 不公开监听，远程连接使用已有 HTTP 服务的同源
 `/api/v2/connector/mesh` WebSocket 路径；反向代理需允许该路径升级 WebSocket。
 
-重新生成操作契约和客户端：在根目录运行
+重新生成可靠操作契约和客户端：在根目录运行
 `PYTHONPATH=connector connector/.venv/bin/python connector/tools/generate_operations.py`。
+重新生成 Server 到 Connector 的六个领域控制服务契约：运行
+`cd connector && PYTHONPATH=. .venv/bin/python tools/generate_remote_control.py`。
 MeshCall 固定 0.3.0；该版本 Python CLI 对当前契约返回 written:null，因此 Python
 模型和薄客户端由同一脚本确定性生成，TypeScript 客户端使用官方生成器。

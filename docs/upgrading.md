@@ -12,11 +12,13 @@
 
 配套要求、创建接口变化与回退限制见[原生项目同步](api/project-archiving.md)。
 
-## MeshCall 工作区创建
+## MeshCall 工作区创建与控制面
 
-本次沿用产品版本 2.1.0，Server、Connector、DSH 插件及客户端仍须配套更新到包含本次契约的构建；相同产品版本号不代表旧构建具备新能力。契约版本见 [runtime-operations/1.0](../contracts/runtime-operations/1.0/README.md)，不匹配时明确提示升级。Server 使用 `python -m agent_server.main` 启动，由父进程管理共享 Router。
+本次沿用产品版本 2.1.0，Server、Connector、DSH 插件及客户端仍须配套更新到包含本次契约的构建；相同产品版本号不代表旧构建具备新能力。可靠工作区操作契约见 [runtime-operations/1.0](../contracts/runtime-operations/1.0/README.md)，Server 到 Connector 的控制面契约见 [connector-control/1.0](../contracts/connector-control/1.0/README.md)。Server 使用 `python -m agent_server.main` 启动，由父进程管理共享 Router。
 
 `v2_45` 保存原生项目与成员事实，`v2_46` 扩展持久操作及调度租约。创建请求先落盘，再由后台投递；MeshCall 故障不切回旧创建 RPC。回退前停止新派发，保留 Server、Connector 和 DSH 回执；尚未核对的操作不得交给旧执行器重做。
+
+Runtime、Session、Workspace、Files、Shell 和 Terminal 的 42 个请求/响应控制调用也不再回退到旧 Connector WebSocket RPC。部署时必须先准备包含新契约的 Server 与 Connector，并在同一维护窗口切换；旧 WebSocket 继续承载上行通知、少量握手兼容调用和终端/文件等独立数据面，不表示控制调用仍走旧 RPC。
 
 ## 已经运行 v2 的部署
 

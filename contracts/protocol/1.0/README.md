@@ -27,6 +27,11 @@ only well-known identifiers may enable product behavior.
 Protocol version `1.0` is independent of the application version and database
 schema revision.
 
+Server 到 Connector 的 MeshCall 控制面另见
+[`connector-control/1.0`](../../connector-control/1.0/README.md)。该契约按领域组织
+Runtime、Session、Workspace、Files、Shell 与 Terminal 服务；本目录继续描述
+Connector 上行事件和跨端 Runtime 数据模型。
+
 ## Native workspace inventory extension
 
 `runtime.workspaces.updated` is an authenticated Connector ingestion notification,

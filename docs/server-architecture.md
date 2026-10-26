@@ -10,7 +10,7 @@ moving dependencies toward the domain.
 | --- | --- | --- |
 | `agent_server/core` | Domain values, API-neutral models, validation, auth primitives | Python and other `core` modules |
 | `agent_server/services` | Use-case orchestration, application errors, repository and RPC ports | `core`, declared ports, and transitional runtime adapters |
-| `agent_server/infra` | PostgreSQL repositories, Redis coordination, files, WebSocket RPC, brokers | `core`, service ports |
+| `agent_server/infra` | PostgreSQL repositories, Redis coordination, files, MeshCall and legacy WebSocket adapters, brokers | `core`, service ports |
 | `agent_server/api` | FastAPI routes, authentication dependencies, HTTP/WebSocket error mapping | `core`, services, infra composition |
 | `agent_server/app.py` | Process composition and lifecycle | all layers |
 
@@ -23,7 +23,7 @@ modules, or the concrete `Store` facade. These rules are enforced by
 | State | Owner | Persistence |
 | --- | --- | --- |
 | Users, connectors, sessions, timeline, catalogs, runtime config | PostgreSQL | Durable, Alembic-versioned |
-| Current runtime notices and interaction/approval status | Runtime | Read live via Connector RPC and relayed as events; not persisted as current state in Server PostgreSQL |
+| Current runtime notices and interaction/approval status | Runtime | Read live via the Connector MeshCall control port and relayed as events; not persisted as current state in Server PostgreSQL |
 | Connector ownership lease, cross-instance RPC routing, invalidation Pub/Sub, distributed locks, short-lived tickets and transfer coordination | Redis | Reconstructible coordination state, finite TTL where retained |
 | Accepted-but-unflushed Timeline upserts and live Timeline sequence head | Redis | Operationally persistent with AOF `everysec`, persistent `/data`, and no eviction; no TTL |
 | Local WebSockets, pending RPC futures, send locks, listener tasks | Server process | Process lifetime only |

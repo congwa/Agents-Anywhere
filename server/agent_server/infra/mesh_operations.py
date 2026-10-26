@@ -12,13 +12,18 @@ from meshcall import Mesh, Router, RouterCredentials
 from meshcall.router_auth import RouterScope
 
 from agent_server.generated.operations import OperationsServiceClient
+from agent_server.infra.connector_mesh_contract import (
+    operations_service_name,
+    service_names,
+)
 from agent_server.infra.connector_rpc import ConnectorOfflineError, ConnectorRpcManager
 from agent_server.infra.redis_coordinator import RedisCoordinator
 
 
 def service_name(connector_id: str, connection_id: str) -> str:
-    identity = hashlib.sha256(f"{connector_id}:{connection_id}".encode()).hexdigest()
-    return f"aa.remote.v1.c{identity}.Operations"
+    """Compatibility helper for the existing durable Operations client."""
+
+    return operations_service_name(connector_id, connection_id)
 
 
 class MeshOperations:
@@ -28,17 +33,18 @@ class MeshOperations:
         self.local_grants: dict[str, dict] = {}
 
     def connection(self) -> Mesh:
+        if self.mesh is not None:
+            return self.mesh
         if not os.environ.get("AGENT_SERVER_MESH_URL"):
             raise ConnectorOfflineError(
                 "Start AA through python -m agent_server.main for MeshCall"
             )
-        if self.mesh is None:
-            self.mesh = Mesh(
-                Router(os.environ["AGENT_SERVER_MESH_URL"]),
-                credentials=RouterCredentials.basic(
-                    "server", os.environ["AGENT_SERVER_MESH_KEY"]
-                ),
-            )
+        self.mesh = Mesh(
+            Router(os.environ["AGENT_SERVER_MESH_URL"]),
+            credentials=RouterCredentials.basic(
+                "server", os.environ["AGENT_SERVER_MESH_KEY"]
+            ),
+        )
         return self.mesh
 
     async def close(self) -> None:
@@ -58,9 +64,16 @@ class MeshOperations:
     async def issue(
         self, connector_id: str, connection_id: str, fingerprint: str
     ) -> dict:
-        name = service_name(connector_id, connection_id)
+        names = service_names(connector_id, connection_id)
         issued = await self.connection().auth.issue_token(
-            [RouterScope(service=name, methods=["ping"], register_service=True)],
+            [
+                RouterScope(
+                    service=name,
+                    methods=["ping"] if domain == "Operations" else [],
+                    register_service=True,
+                )
+                for domain, name in names.items()
+            ],
             ttl_seconds=900,
         )
         value = {
@@ -85,7 +98,8 @@ class MeshOperations:
         return {
             "protocolVersion": "1.0",
             "path": "/api/v2/connector/mesh",
-            "service": name,
+            "service": names["Operations"],
+            "services": names,
             "instanceId": connection_id,
             "connectionId": connection_id,
             "token": issued.token,

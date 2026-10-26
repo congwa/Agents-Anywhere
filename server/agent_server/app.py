@@ -44,16 +44,16 @@ from agent_server.core.api_namespace import API_V2_PREFIX
 from agent_server.core.process_settings import ProcessSettings
 from agent_server.core.setup_token import SetupToken
 from agent_server.core.utc import utc_now
+from agent_server.infra.connector_mesh_control import MeshConnectorControlTransport
 from agent_server.infra.connector_rpc import ConnectorRpcManager
-from agent_server.infra.mesh_operations import MeshOperations
-from agent_server.infra.operation_transport import MeshOperationTransport
-from agent_server.services.operations import OperationDispatcher
 from agent_server.infra.db.migrations import (
     database_schema_version,
     require_current_database,
     upgrade_database,
 )
 from agent_server.infra.fs_downloads import FsDownloadRelayManager
+from agent_server.infra.mesh_operations import MeshOperations
+from agent_server.infra.operation_transport import MeshOperationTransport
 from agent_server.infra.redis_coordinator import RedisCoordinator
 from agent_server.infra.repositories.facade import Store
 from agent_server.infra.terminal_broker import TerminalBroker
@@ -67,6 +67,7 @@ from agent_server.services.device_runtimes import DeviceRuntimeService
 from agent_server.services.effective_capabilities import (
     publish_connector_session_capabilities,
 )
+from agent_server.services.operations import OperationDispatcher
 from agent_server.services.session_runtime_state_cache import SessionRuntimeStateCache
 from agent_server.services.setup_tokens import SetupTokenService
 from agent_server.services.shell_tasks import ShellTaskManager
@@ -238,6 +239,11 @@ def create_app(
         instance_id=process_settings.instance_id(),
     )
     app.state.mesh_operations = MeshOperations(app.state.rpc, app.state.redis)
+    app.state.connector_control_transport = MeshConnectorControlTransport(
+        app.state.mesh_operations,
+        app.state.rpc,
+    )
+    app.state.rpc.bind_request_transport(app.state.connector_control_transport)
     app.state.operation_transport = MeshOperationTransport(app.state.mesh_operations, app.state.store)
     app.state.operation_dispatcher = OperationDispatcher(app.state.store, app.state.operation_transport)
     app.state.store.bind_connector_lifecycle(app.state.rpc.lifecycle_guard)
