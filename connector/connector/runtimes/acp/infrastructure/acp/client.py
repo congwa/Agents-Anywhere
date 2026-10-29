@@ -93,17 +93,20 @@ class AgentClient:
             )
         )
 
-    async def resume(self, session_id: str, cwd: str) -> dict:
+    async def list_sessions(self, cwd=None, cursor=None) -> dict:
+        return wire(await self.connection.list_sessions(cwd=cwd, cursor=cursor))
+
+    async def resume(self, session_id: str, cwd: str, **metadata) -> dict:
         if self.capabilities.get("sessionCapabilities", {}).get("resume") is not None:
             return wire(
                 await self.connection.resume_session(
-                    session_id=session_id, cwd=cwd, mcp_servers=[]
+                    session_id=session_id, cwd=cwd, mcp_servers=[], **metadata
                 )
             )
         if self.capabilities.get("loadSession") is True:
             return wire(
                 await self.connection.load_session(
-                    session_id=session_id, cwd=cwd, mcp_servers=[]
+                    session_id=session_id, cwd=cwd, mcp_servers=[], **metadata
                 )
             )
         raise AcpError("agent_resume_unsupported", "Agent 未提供会话恢复能力。")

@@ -106,10 +106,23 @@ class RuntimeWorkflowService:
     async def begin(
         self, payload: BeginCreationRequest, *, user_id: str
     ) -> WorkflowView:
+        # Reuse ordinary session creation's validation before reserving a workflow.
+        from agent_server.services.session_run import (
+            SessionRunInvalidConfigError,
+            _decode_inline_attachment,
+        )
+        try:
+            total = sum(len(_decode_inline_attachment(item)) for item in payload.attachments)
+        except SessionRunInvalidConfigError as error:
+            raise WorkflowError("invalid_attachment", str(error), 422) from error
+        if total > 32 * 1024 * 1024:
+            raise WorkflowError("attachments_too_large", "附件总大小不能超过 32 MiB。", 422)
         prep = await self.store.get_runtime_workflow(
             payload.preparationId, user_id=user_id, kind="preparation"
         )
         request = payload.model_dump(exclude_none=True)
+        if not payload.attachments:
+            request.pop("attachments", None)
         row = await self.store.put_runtime_workflow(
             {
                 "id": payload.createOperationId,
@@ -191,6 +204,7 @@ class RuntimeWorkflowService:
         session = await self.store.get_session(session_id, user_id=user_id)
         if (
             method not in {"session.tree", "session.configuration.get"}
+            and not (method == "session.agent.operate" and values.get("operation") in {"authentication.status", "resources.get", "queue.get"})
             and not session.takeover
         ):
             raise WorkflowError("takeover_required", "请先授权工作台控制此会话。")
@@ -209,6 +223,14 @@ class RuntimeWorkflowService:
             "session.close": "session.close",
             "session.configuration.get": "session.configuration.read",
             "session.configuration.update": "session.configuration.update",
+            "session.recover": "session.recover",
+            "session.agent.operate": {
+                "authentication.status": "session.authentication.read", "resources.get": "session.resources.read",
+                "resources.reload": "session.resources.update", "queue.get": "session.queue.read",
+                "queue.clear": "session.queue.update", "message.follow_up": "session.follow_up",
+                "session.rename": "session.rename", "session.fork": "session.fork",
+                "directories.add": "session.directories.update", "tools.set": "session.tools.update",
+            }.get(values.get("operation"), "unsupported"),
         }[method]
         if not any(
             cap.get("capabilityId") == required
@@ -308,9 +330,28 @@ class RuntimeWorkflowService:
                 params = {
                     key: value
                     for key, value in request.items()
-                    if key not in {"expectedRevision", "catalogRevision"}
+                    if key not in {"expectedRevision", "catalogRevision", "attachments"}
                 }
                 params["sessionId"] = row["session_id"]
+                if request.get("attachments"):
+                    from agent_server.core.models import InlineAttachmentRef
+                    from agent_server.services.session_run import (
+                        _decode_inline_attachment,
+                    )
+                    refs = []
+                    for raw in request["attachments"]:
+                        item = InlineAttachmentRef.model_validate(raw)
+                        data = _decode_inline_attachment(item)
+                        # A retried creation uploads to the same ID and sends identical
+                        # references to the Runtime, including after a lost response.
+                        file_id = "file_" + fingerprint([row["id"], item.fileId, hashlib.sha256(data).hexdigest(), item.name, item.mediaType])[:40]
+                        saved = await self.store.save_user_uploaded_file(
+                            session_id=row["session_id"], user_id=user_id,
+                            name=item.name, data=data, media_type=item.mediaType, file_id=file_id,
+                        )
+                        refs.append({key: saved[key] for key in ("fileId", "name", "mediaType", "size", "sha256")})
+                    params["attachments"] = refs
+                    params["timelineAttachments"] = refs
             else:
                 method, params = (
                     "session.creation.get",
@@ -326,7 +367,7 @@ class RuntimeWorkflowService:
     def _view(row: dict[str, Any], state: dict[str, Any]) -> WorkflowView:
         return WorkflowView(
             protocolVersion="1.2"
-            if row["runtime_type"] == "acp" or "configuration" in row["request"]
+            if "configuration" in state or "configuration" in row["request"]
             else "1.1",
             id=row["id"],
             kind=row["kind"],

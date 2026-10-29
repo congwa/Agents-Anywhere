@@ -9,8 +9,8 @@ class AgentComponentRequest(BaseModel):
         "list", "get_operation", "install", "activate", "rollback", "remove"
     ]
     operationId: str | None = Field(default=None, min_length=1, max_length=160)
-    profileId: str = Field(
-        default="pi",
+    profileId: str | None = Field(
+        default=None,
         min_length=1,
         max_length=160,
         pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$",

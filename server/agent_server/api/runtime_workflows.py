@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_server.core.runtime_workflows import (
     BeginCreationRequest,
+    AgentOperationRequest,
+    RecoverRuntimeSessionRequest,
     CloseRuntimeSessionRequest,
     PositionSelectionRequest,
     PrepareWorkspaceRequest,
@@ -182,3 +184,27 @@ async def close_session(
             session_id, "session.close", payload.model_dump(), user_id=user_id
         )
     )
+
+
+@router.post("/sessions/{session_id}/operations", status_code=202)
+async def agent_operation(
+    session_id: str,
+    payload: AgentOperationRequest,
+    service: Annotated[RuntimeWorkflowService, Depends(get_runtime_workflow_service)],
+    user_id: Annotated[str, Depends(current_user_id)],
+):
+    return await invoke(service.session_action(
+        session_id, "session.agent.operate", payload.model_dump(), user_id=user_id,
+    ))
+
+
+@router.post("/sessions/{session_id}/recover", status_code=202)
+async def recover_session(
+    session_id: str,
+    payload: RecoverRuntimeSessionRequest,
+    service: Annotated[RuntimeWorkflowService, Depends(get_runtime_workflow_service)],
+    user_id: Annotated[str, Depends(current_user_id)],
+):
+    return await invoke(service.session_action(
+        session_id, "session.recover", payload.model_dump(), user_id=user_id,
+    ))

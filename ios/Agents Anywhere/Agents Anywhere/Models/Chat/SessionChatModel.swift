@@ -79,22 +79,7 @@ final class SessionChatModel {
         if session.failure?.kind == .authentication { return String(localized: "登录状态需要重新验证，已填写的内容会保留。") }
         return String(localized: "正在确认 Agent 的最新状态，已填写的内容会保留。")
     }
-    var canReadAgentConfiguration: Bool { workflowAPI != nil && session.isValid && session.runtime.allows("session.configuration.read") }
-    var canUpdateAgentConfiguration: Bool { workflowAPI != nil && session.isValid && session.runtime.allows("session.configuration.update") }
-    func agentConfiguration() async throws -> JSONValue {
-        guard canReadAgentConfiguration, let workflowAPI else { throw HTTPError.invalidResponse }
-        let result = try await workflowAPI.configuration(sessionID: session.id)
-        try Task.checkCancellation()
-        guard session.isValid else { throw CancellationError() }
-        return result
-    }
-    func updateAgentConfiguration(revision: Int, values: [String: JSONValue]) async throws -> JSONValue {
-        guard canUpdateAgentConfiguration, let workflowAPI else { throw HTTPError.invalidResponse }
-        let result = try await workflowAPI.updateConfiguration(sessionID: session.id, operationID: UUID().uuidString, expectedRevision: revision, values: values)
-        try Task.checkCancellation()
-        guard session.isValid else { throw CancellationError() }
-        return result
-    }
+
 
     var canAttach: Bool { session.runtime.allows("runtime.attachment") }
     var canChangeTakeover: Bool {

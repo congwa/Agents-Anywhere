@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useTranslations } from "next-intl"
 import { apiClient } from "@/lib/api"
 import { workflowApi, type WorkflowView, type WorkflowInteraction, type RuntimeDialogValue } from "@/features/dashboard/runtime-workflows"
 import { isApiError } from "@/lib/api/errors"
@@ -34,6 +35,7 @@ function rememberOperation(scope: string, id: string, remove = false) {
 
 /** Workspace-owned requests survive composer unmounts and never retry automatically. */
 export function useSessionCreation(options: Options) {
+  const tCreation = useTranslations("dashboard.new")
   const latest = React.useRef(options)
   latest.current = options
   const [creations, setCreations] = React.useState<Record<string, SessionCreation>>({})
@@ -107,9 +109,6 @@ export function useSessionCreation(options: Options) {
       if (version !== generation.current || userId !== latest.current.userId) return
       const attachments = await inlineAttachmentsFromFiles(entry.draft.attachments)
       if (version !== generation.current || userId !== latest.current.userId) return
-      if (entry.draft.preparedWorkspace && attachments.length) {
-        throw new Error("工作区准备流程暂不支持首条消息附件，附件和草稿已保留。请先创建会话后发送附件。")
-      }
       requestSent = true
       let created
       if (entry.draft.preparedWorkspace) {
@@ -117,7 +116,7 @@ export function useSessionCreation(options: Options) {
         rememberOperation(latest.current.storageScope, id)
         let operation = await workflowApi.begin(token, { ...entry.draft.preparedWorkspace,
           createOperationId: id, clientMessageId: entry.draft.clientMessageId,
-          content: request.content, selections: request.selections ?? {}, ...(request.title ? { title: request.title } : {}),
+          content: request.content, selections: request.selections ?? {}, ...(attachments.length ? { attachments } : {}), ...(request.title ? { title: request.title } : {}),
         })
         while (version === generation.current && userId === latest.current.userId) {
           setWorkflowCreations(current => ({ ...current, [id]: operation }))
@@ -125,13 +124,13 @@ export function useSessionCreation(options: Options) {
           if (["failed", "cancelled", "rejected", "outcome_unknown"].includes(operation.state.phase)) {
             workflowRefused = operation.state.messageAccepted === false
             if (workflowRefused) rememberOperation(latest.current.storageScope, id, true)
-            throw new Error(operation.state.failure?.message ?? `创建结果：${operation.state.phase}`)
+            throw new Error(operation.state.failure?.message ?? tCreation("createFailed"))
           }
           await new Promise(resolve => window.setTimeout(resolve, 1000))
           operation = await workflowApi.get(token, "creation", operation.id)
         }
         if (version !== generation.current || userId !== latest.current.userId) return
-        if (!operation.sessionId) throw new Error("创建操作缺少会话身份。")
+        if (!operation.sessionId) throw new Error(tCreation("createFailed"))
         created = await apiClient.get<{ session: SessionView; attachments?: AttachmentRef[] }>(`/sessions/${encodeURIComponent(operation.sessionId)}/meta`, { token })
         rememberOperation(latest.current.storageScope, id, true)
         setWorkflowCreations(current => { const next = { ...current }; delete next[id]; return next })
@@ -158,7 +157,7 @@ export function useSessionCreation(options: Options) {
     } finally {
       if (version === generation.current) inFlight.current.delete(id)
     }
-  }, [publish, returnToEditor])
+  }, [publish, returnToEditor, tCreation])
 
   const start = React.useCallback((draft: SessionCreationDraft, message: OptimisticSessionMessage, onBound: (id: string) => void) => {
     if (entries.current[draft.localSessionId]) return

@@ -202,7 +202,6 @@ fun SessionDetailScreen(
         )
     }
     var draft by remember(composerDraftSessionId) { mutableStateOf(restoredComposerDraft.text) }
-    var showAgentConfiguration by remember(sessionId) { mutableStateOf(false) }
     var showRuntimeSettings by remember(sessionId) { mutableStateOf(false) }
     var noticeResponseErrors by remember(sessionId) { mutableStateOf(emptyMap<String, String>()) }
     var forceLatestRequest by remember(sessionId) { mutableStateOf(0) }
@@ -1381,10 +1380,6 @@ fun SessionDetailScreen(
         ?: state.capabilities.find(SESSION_COMMAND_EXECUTE_CAPABILITY, runtimeId, runtimeType)
 
     fun openRuntimeSettings() {
-        if (!isPreparedSession && state.capabilities.isUsable("session.configuration.read", runtimeId, runtimeType)) {
-            showAgentConfiguration = true
-            return
-        }
         showRuntimeSettings = true
         if (state.catalogs.model == null && !state.catalogs.modelLoading) {
             loadModelCatalog()
@@ -1853,12 +1848,6 @@ fun SessionDetailScreen(
             onDismiss = { if (!shareBusy) pendingShareItemIds = null },
             onConfirm = ::createShare,
         )
-    }
-
-    if (showAgentConfiguration && sessionId != null) {
-        AgentConfigurationDialog(sessionId = sessionId, controller = controller,
-            canUpdate = state.capabilities.isUsable("session.configuration.update", runtimeId, runtimeType),
-            onDismiss = { showAgentConfiguration = false })
     }
 
     if (showRuntimeSettings) {

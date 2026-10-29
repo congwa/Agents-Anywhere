@@ -41,7 +41,6 @@ jobs:
       server: ${{ steps.paths.outputs.server }}
       web: ${{ steps.paths.outputs.web }}
       desktop: ${{ steps.paths.outputs.desktop }}
-      pi: ${{ steps.paths.outputs.pi }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -56,7 +55,6 @@ jobs:
           server=false
           web=false
           desktop=false
-          pi=false
 
           run_everything() {
             echo "::notice::$1; running every check"
@@ -65,7 +63,6 @@ jobs:
             server=true
             web=true
             desktop=true
-            pi=true
           }
 
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
@@ -85,16 +82,15 @@ jobs:
                 dsh-bridge-next/*) plugin=true ;;
                 # Plugin integration tests run the Connector's DSH probe and the
                 # Server tests import the Connector package.
-                connector/*) connector=true; server=true; plugin=true; pi=true ;;
-                server/*) server=true; plugin=true; pi=true ;;
-                pi-runtime/*|pi-execution/*|pi-acp-agent/*) pi=true; connector=true ;;
+                connector/*) connector=true; server=true; plugin=true ;;
+                server/*) server=true; plugin=true ;;
                 web-next/*) web=true ;;
                 desktop-workbench/*) desktop=true ;;
               esac
             done < "$RUNNER_TEMP/changed-paths"
           fi
 
-          for scope in plugin connector server web desktop pi; do
+          for scope in plugin connector server web desktop; do
             echo "$scope=${!scope}" >> "$GITHUB_OUTPUT"
             echo "$scope: ${!scope}"
           done
@@ -203,12 +199,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Connector dependencies
         run: uv sync --project connector
-      - name: Build shared execution and AA Agent
-        run: |
-          npm --prefix pi-execution install --ignore-scripts --package-lock=false --no-audit --no-fund
-          npm --prefix pi-execution run build
-          npm --prefix pi-acp-agent install --ignore-scripts --package-lock=false --no-audit --no-fund
-          npm --prefix pi-acp-agent run build
       - name: Verify actual ACP transport, ownership and components
         working-directory: connector
         run: |
@@ -216,7 +206,14 @@ jobs:
           uv run python scripts/verify-acp-processes.py
           uv run python scripts/verify-acp-components.py
           uv run python scripts/verify-acp-packaging.py
-          uv run python ../pi-acp-agent/scripts/verify-agent.py
+          uv run python scripts/verify-acp-generic-boundary.py
+      - name: Verify published Pi runtime with a local model
+        working-directory: connector
+        shell: bash
+        run: |
+          for scenario in allow deny readonly attachment steer slow reasoning interrupt; do
+            uv run python scripts/verify-pi-managed.py --scenario "$scenario" --cache-root "$RUNNER_TEMP/aa-pi-runtime-checks"
+          done
 
   server:
     name: Server tests
@@ -313,61 +310,3 @@ jobs:
           corepack yarn renderer:typecheck
           corepack yarn workspace agents-anywhere-desktop-renderer protocol:check
           corepack yarn test:main
-
-  pi:
-    name: pi Runtime SDK checks
-    needs: changes
-    if: needs.changes.outputs.pi == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: agents_anywhere_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      AGENT_SERVER_TEST_DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/agents_anywhere_test
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install SDK and Connector
-        run: |
-          uv sync --project connector
-          uv sync --project server
-          uv pip install --python server/.venv/bin/python ./connector
-          npm --prefix pi-execution install --ignore-scripts --package-lock=false --no-audit --no-fund
-          npm --prefix pi-execution run build
-          npm --prefix pi-runtime install --ignore-scripts --package-lock=false --no-audit --no-fund
-      - name: Check SDK execution boundaries
-        run: |
-          npm --prefix pi-runtime run build
-          node pi-runtime/scripts/verify-runtime.mjs
-          node pi-runtime/scripts/verify-recovery.mjs
-          node pi-runtime/scripts/verify-admission-recovery.mjs
-          node pi-runtime/scripts/verify-catalog-revisions.mjs
-          node pi-runtime/scripts/verify-model-boundary.mjs
-          node pi-runtime/scripts/verify-tool-boundary.mjs
-          node pi-runtime/scripts/verify-workers.mjs
-      - name: Check packaged Python bridge
-        run: |
-          node pi-runtime/scripts/package-artifact.mjs
-          PYTHONPATH=connector connector/.venv/bin/python pi-runtime/scripts/verify-connector.py
-      - name: Check formal Server startup and workflow recovery
-        run: |
-          PYTHONPATH=server:connector server/.venv/bin/python pi-runtime/scripts/verify-server-startup.py
-          PYTHONPATH=server:connector server/.venv/bin/python pi-runtime/scripts/verify-server.py

@@ -12,7 +12,7 @@ export function formDefaults(schema: FormSchema): Record<string, unknown> {
 }
 const formValidator = new Ajv2020({ allErrors: true, strict: false, validateFormats: false })
 const formValidators = new Map<string, ReturnType<typeof formValidator.compile>>()
-export function formErrors(schema: FormSchema, values: Record<string, unknown>): Record<string, string> {
+export function formErrors(schema: FormSchema, values: Record<string, unknown>): Record<string, "required" | "invalid" | "invalidSchema"> {
   try {
     const key = JSON.stringify(schema)
     let validate = formValidators.get(key)
@@ -24,9 +24,9 @@ export function formErrors(schema: FormSchema, values: Record<string, unknown>):
     if (validate(values)) return {}
     return Object.fromEntries((validate.errors ?? []).map(error => {
       const field = error.keyword === "required" ? String(error.params.missingProperty) : error.instancePath.split("/")[1]?.replace(/~1/g, "/").replace(/~0/g, "~") || "_form"
-      return [field, error.keyword === "required" ? "请填写此项" : "请填写有效值"]
+      return [field, error.keyword === "required" ? "required" : "invalid"]
     }))
-  } catch { return { _form: "Agent 表单结构无效" } }
+  } catch { return { _form: "invalidSchema" } }
 }
 export function configSchema(configuration: AgentConfiguration, includeModel = false): FormSchema {
   return { type: "object", properties: Object.fromEntries(configuration.options.filter(option => includeModel || option.category !== "model").map(option => {

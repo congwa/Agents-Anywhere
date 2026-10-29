@@ -12,6 +12,10 @@ class AcpError(RuntimeError):
         super().__init__(message)
 
 
+class PromptRejectedBeforeDispatch(AcpError):
+    """A local adapter refused input before invoking the Agent prompt method."""
+
+
 def fingerprint(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(
@@ -32,6 +36,10 @@ class AgentProfile:
     release_ready: bool = False
     unavailable_reason: str = "acp_release_acceptance_pending"
     permission_options: tuple[tuple[str, str], ...] = ()
+    runtime_capabilities: tuple[str, ...] = ()
+    # Release acceptance belongs to the profile, never to the ACP transport.
+    required_work_devices: frozenset[str] = frozenset()
+    required_clients: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)

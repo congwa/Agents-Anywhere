@@ -28,10 +28,19 @@ fun RuntimeWorkflowDialog(coordinator: RuntimeWorkflowCoordinator, onOpenAccepte
     LaunchedEffect(value.optString("id")) { while (true) { kotlinx.coroutines.delay(1500); coordinator.refresh() } }
     val state = value.getJSONObject("state")
     val requests = state.optJSONArray("interactions")
-    AlertDialog(onDismissRequest = {}, title = { Text(if (value.optString("kind") == "preparation") "工作区准备" else "创建会话") },
+    val openRequests = (0 until (requests?.length() ?: 0)).map { requests!!.getJSONObject(it) }
+        .filter { it.optString("status") == "open" }
+    val hasQuestions = openRequests.isNotEmpty()
+    val accepted = state.optBoolean("messageAccepted")
+    LaunchedEffect(value.optString("id"), accepted) {
+        if (accepted && !binding) onOpenAccepted()
+    }
+    val failure = state.optJSONObject("failure")?.optString("message")?.takeIf { it.isNotBlank() }
+    val stopped = state.optString("phase") in setOf("failed", "rejected", "cancelled", "expired", "outcome_unknown")
+    if (!hasQuestions && error == null && failure == null && !stopped) return
+    AlertDialog(onDismissRequest = {}, title = { Text(openRequests.firstOrNull()?.getString("title") ?: androidx.compose.ui.res.stringResource(com.agentsanywhere.app.R.string.new_session_create_failed)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(state.optString("phase"))
-            if (error != null) Text(error.orEmpty())
+            if (error != null || failure != null) Text(error ?: failure.orEmpty())
             for (i in 0 until (requests?.length() ?: 0)) {
                 val request = requests!!.getJSONObject(i)
                 if (request.optString("status") == "open") key(request.getString("interactionId"), request.getString("ownerGeneration")) {
@@ -44,7 +53,7 @@ fun RuntimeWorkflowDialog(coordinator: RuntimeWorkflowCoordinator, onOpenAccepte
             }) { Text(if (binding) "正在读取会话…" else "打开已创建的会话") }
         }, dismissButton = {
             if (state.optBoolean("canCancel") || state.optBoolean("canCancelInitialization")) TextButton(enabled = !pending, onClick = { scope.launch { coordinator.cancel() } }) { Text("取消") }
-            if (state.optString("phase") in setOf("failed", "rejected", "cancelled", "expired", "outcome_unknown")) TextButton(onClick = { coordinator.dismiss() }) { Text("关闭并保留草稿") }
+            if (state.optString("phase") in setOf("failed", "rejected", "cancelled", "expired", "outcome_unknown")) TextButton(onClick = { coordinator.dismiss() }) { Text(androidx.compose.ui.res.stringResource(com.agentsanywhere.app.R.string.common_close)) }
             else if (state.optBoolean("messageAccepted")) TextButton(enabled = !binding && !pending, onClick = { coordinator.dismiss() }) { Text("稍后打开") }
         })
 }

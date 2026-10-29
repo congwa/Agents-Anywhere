@@ -539,6 +539,7 @@ class SessionRunRepository(
         name: str,
         data: bytes,
         media_type: str | None = None,
+        file_id: str | None = None,
     ) -> dict[str, Any]: ...
 
     async def read_uploaded_file(

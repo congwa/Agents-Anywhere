@@ -1,91 +1,112 @@
-# ACP Runtime 实现记录
+# ACP Runtime 与 Pi 当前实现
 
-记录日期：2026-10-29。当前工作树为 `Agents-Anywhere-acp-agent-composition`，分支为 `feat/con+be/acp-agent-composition`。基于上游 `e5c0179d`，参考分支 `feat/con+be/pi-runtime` 的源码提交 `b8575565` 以 `d6e5f5a5` 整体移入；没有搬入原工作树中未提交的 `tests/` 改动。产品版本不变。
+本文按当前工作树源码整理，描述 Connector 的通用 ACP 适配和默认 Pi 接入。源码入口见文末；能力是否可用以实例和会话实际返回值为准。
 
-## 本轮源码实现
+## 默认执行路径
 
-- Web、Electron、Android、iOS 的准备、异步创建、初始化交互、结构化表单与按账号隔离的恢复引用直接复用参考分支源码。
-- `AcpAgentApplication` 只依赖 `AgentCapabilityPort`；生命周期、配置、消息、命令和回执经统一端口调用，不导入 Pi 或 OpenMA SDK。
-- `PiCapabilities` 组合 OpenMA 的提示转换、历史回放、工具分类、命令目录及语法，与 AA 的工作区信任、持久接纳回执、工具审批、最终请求守卫和原生写锁。
-- 会话配置在四端复用已有结构化表单；Web/Electron 使用同一份弹窗源码，Android 和 iOS 通过既有设置入口打开。Server 保留配置读取／更新能力，配置读取不要求取得会话写控制。
-- 已创建会话的附件路径接入 ACP：图片作为图片块，文件先校验再提供本机内容路径；命令复用现有四端命令界面。准备式创建的首条附件仍未接入，Web/Electron 明确保留附件草稿。
-- 能力随绑定状态进入持久 outbox；四端按有效能力决定入口，不按 Pi 或 DSH 名称分支。
+```text
+Web / Desktop / Android / iOS
+  → Server runtime-workflows / 会话 API
+  → Connector AcpRuntime
+  → 官方 Python ACP SDK（stdio v1）
+  → @openma/pi-acp 发布包
+  → Pi SDK
+```
 
-按用户最新要求，本轮只搬移和修改源码，不运行编译、测试、探针或其他校验。下方历史表格记录参考工作树较早阶段的情况，不代表当前分支的校验结果；当前已实现部分以上述源码说明为准。
+默认 Provider 为 Codex、Claude、DSH、Pi。Pi 使用 `runtimeType=pi`、`implementationType=acp-stdio`，ACP 是内部对接协议。通用 `AcpProvider` 通过注入 `AgentProfile`、启动配置、准备策略复用协调逻辑，其他 Agent 可以有自己的 Provider 身份；默认列表没有单独名为 ACP 的入口。
 
-## 迁移前的阶段记录
+Pi 的 `PiProvider` 覆盖了通用 Provider 的配置、发现和启动流程：直接托管安装并运行上游 npm 发布包，不经过 AA 签名组件选择。旧 `pi-runtime/`、`connector/connector/runtimes/pi/`、`contracts/pi-bridge/` 已移除。
 
-以下是参考工作树早期的阶段记录。当前源码已改为组合适配结构；Pi Profile 的组件门禁为 `pi_acp_release_acceptance_pending`，安装并选中符合要求的签名组件后由 `AcpProvider` 装配运行。正式发布源、公钥与跨平台组件发行仍未配置。
+## Pi 实例配置与安装
 
-| 范围 | 已实现 | 后续仍需实现或验证 |
-| --- | --- | --- |
-| 领域边界 | Profile、绑定、准备、创建、消息、交互、配置、历史准入、组件模型分层 | 用实际新增 Agent 检验 Profile 扩展边界 |
-| ACP 传输 | 官方 Python SDK `agent-client-protocol==0.12.1`，stdio v1，初始化权限与表单，配置更新 | Pi 增强回执、命名空间服务端；v2 保持关闭 |
-| 准备与创建 | 会话式准备接管、预留、过期关闭、初始化回答与取消、确定失败／未知分别保存 | Pi 无会话预检和资源信任实现 |
-| 消息 | 稳定 ID、输入摘要冲突、v1 完成接纳证据、未知不自动重投 | 增强早期 ACK 与重启后的 Agent 回执查询 |
-| 执行与关闭 | 会话独立进程、并发配额、异常退出收敛、关闭前本地排队请求拒绝 | 实际 Pi 写锁、恢复位置及关闭验收 |
-| 交互 | 持久化、版本／代际、重复回答幂等、受限表单、关闭失效 | 原生第三方 TUI 请求适配、认证与子 Agent 结构化控制 |
-| 配置 | 完整快照、内容摘要、单调 revision、部分成功保留真实状态 | Pi 最终模型／推理强度／端点守卫；会话设置完整 UI |
-| 同步 | SQLite 事务 outbox、有序重试、ACK 后删除、文本／思考／工具投影、最终条目保留身份 | 完整来源回放替换的 Server 持久化用例、计划与用量投影、只读原生发现 |
-| 恢复 | 重启阻塞旧执行者、失效交互、保存接纳或未知事实、禁止未知消息重投 | 重新连接实际 Agent、核验历史与配置后恢复写入、分支 token |
-| 附件与高级操作 | 未实现能力明确拒绝，不丢弃附件 | 附件转换、MCP、steer、排队、原生命令及身份切换 |
-| 组件 | 签名清单、受信源端口、不可变安装、激活、回退、会话引用保护、可重复打包 | 正式公钥／发布源、六目标真实组件、升级策略 UI、操作引用清理、共享数据迁移 |
-| 三平台 | POSIX 监督进程组；Windows 挂起启动、Job 分配后恢复；跨平台 CI 探针任务 | Linux/Windows 实际执行结果和六架构产物；Windows 原生锁与复杂路径验收 |
-| 四端 | 创建通用配置、结构化表单、配置与组件 API 客户端 | 组件管理可见页面、完整会话配置页面与四端业务验收 |
+Pi 复用现有模型网关表单，必填 `modelGateway`，可填写 `customModels`。未填写自定义模型时，在启动实例时从网关 `/models` 获取最多 64 个模型；获取失败或目录为空时返回明确错误，提示填写模型 ID。
 
-来源替换契约是预留的独立契约，当前没有发布对应事件，不代表 Server 已经支持来源删除或完整替换。当前本地历史快照明确为 partial，不把缓存当作完整原生历史。
+当前 Provider 固定安装以下依赖：
 
-## 关键实现路径
+| 包 | 源码固定值 |
+| --- | --- |
+| `@openma/pi-acp` | `0.1.8` |
+| `@earendil-works/pi-coding-agent` | `1.4.0` |
+| `@earendil-works/pi-ai` | `1.4.0` |
+| `@earendil-works/pi-agent-core` | `1.4.0` |
 
-- Connector：`connector/connector/runtimes/acp/`；既有 Runtime 协议新增配置端口，`RuntimeInstance` 显式转发，分发器支持配置与组件路由。
-- 契约：新增 `contracts/acp-runtime/1.0`、`contracts/runtime-workflows/1.2`；保留旧 1.1 文件。工作流 schema 由 Server 导出，ACP schema 由 Connector 导出，避免双重生成源。
-- Server：`core/agent_components.py`、`core/runtime_workflows.py`、`services/runtime_workflows.py`、`api/runtime_workflows.py`、`api/connector_runtimes.py`。本次 ACP 增量使用已有操作 JSON 存储，没有新增数据库 schema。
-- Web/Electron：`runtime-forms.ts`、`structured-agent-fields.tsx`、创建工作流面板与 composer；表单使用现有组件库，JSON Schema 校验保留类型，空 enum 值用 UI 索引映射。
-- Android：`AgentForm.kt`、`StructuredAgentFields.kt`、创建／会话交互入口、`RuntimeWorkflowApi`。
-- iOS：`AgentForm.swift`、`StructuredAgentFields.swift`、创建／会话交互入口、`V2RuntimeWorkflowAPI`。
+安装器优先复用本机带 npm 的 Node `>=22.19 <23`；否则下载 Node `22.23.2` 并检查官方 SHA-256。下载目标覆盖 macOS、Windows、Linux 的 x64/arm64，Linux 要求 glibc。这里描述代码中的平台选择逻辑，不表示各目标已有运行验证结果。
 
-## 可复现的直接检查
+依赖按固定依赖表的摘要缓存到 `npm-runtimes/`，安装过程使用文件锁、临时目录和原子重命名。npm 使用 `--omit=dev --ignore-scripts --package-lock=false`，安装发布包，不在工作设备编译应用源码。直接依赖版本固定，但没有锁定完整传递依赖树，不能把缓存身份当作可重现制品摘要。
 
-Connector 目录：
+每个实例以 `session_namespace` 和 `runtime_id` 的摘要隔离协调与 Pi 数据：
+
+- `coordination.sqlite` 保存绑定、操作、交互、配置、投影和 outbox。
+- `configurations/<配置摘要>/pi/` 中的 `models.json`、`settings.json` 和 `aa-permissions.json` 保存实例配置，避免已取消的旧配置准备覆盖新配置；写入采用私有权限和原子替换。
+- `sessions/` 作为受管 Pi 原生会话目录。
+- 网关密钥通过子进程环境 `AA_PI_GATEWAY_KEY` 传递，模型配置引用该变量。
+
+启动发布包入口 `@openma/pi-acp/dist/bin.js`，传入隔离的 `--agent-dir`、`--session-dir`、`--quiet-startup` 和 `--no-delegation`。此路径不使用用户全局 `~/.pi/agent` 配置。
+
+## 准备、创建与消息
+
+客户端选定 Agent 和工作区后自动准备。默认会话式准备启动独立 ACP 进程并打开 Agent 会话，返回实际配置与模型目录；正式创建预留并接管同一准备上下文。准备过期、取消和关闭负责释放进程。
+
+Web、Desktop、Android、iOS 复用既有新建、模型、权限、发送和停止入口，保留必要的授权问答与错误恢复。独立 Agent 配置页面和原生执行位置面板已移除；Server 和 Connector 的配置 API 仍保留。
+
+创建工作流分别记录平台会话、原生会话和首条消息接纳事实。消息使用稳定 `clientMessageId` 和输入摘要，同一 ID 的不同输入被拒绝。状态区分未发送、发送中、已接纳、确定拒绝和结果未知。
+
+PiClient 在观察到 Pi SDK 的运行开始标记，或助手、思考、工具及交互事件时发布执行观察，Connector 据此记录接纳；标准 ACP prompt 完成响应也是接纳证据。执行观察不等同于 Agent 的持久早期回执。连接丢失且没有确定证据时保留未知，不自动重投。
+
+首条及后续消息均已接入附件转换：Server 保存上传附件并传递引用，Connector 下载整批校验媒体类型、大小与摘要，图片转 ACP 图片块，其他文件提供本机资源链接。客户端仍按有效附件能力和限制控制入口。
+
+## 权限、配置与命令
+
+PiClient 将 Pi 的模型和推理配置映射到现有目录，并补充三个权限选项：
+
+| 权限 | 扩展行为 |
+| --- | --- |
+| 写入与命令审批（`ask`） | `read`、`ls`、`find`、`grep` 直接执行，其他工具询问 |
+| 全部工具审批（`ask_all`） | 每次工具调用均询问 |
+| 只读（`readonly`） | 允许上述读取工具，阻止其他工具 |
+
+Connector 显式加载 `permissions.mjs`，打开和恢复会话时核验 Agent 返回的扩展清单，缺失则阻止执行。扩展冻结工具输入，通过 Pi 的确认请求等待用户回答；PiClient 将该请求转换为 AA 工具审批。权限配置按原生会话 ID 存储，缺失或无效配置默认询问；原生 `/bash` 命令另在适配层执行同一权限检查，确定拒绝不会把会话置为需要恢复。此机制是工具事件层控制，不是操作系统沙箱，也不代表已实现旧方案的全部资源信任、最终请求守卫或外部写入所有权保证。
+
+配置保存完整快照、内容摘要和单调 revision；逐项更新部分成功时保留真实结果。模型与权限选择通过会话配置更新。命令来自 Agent 的 `available_commands_update`，执行前再次核验命令仍在目录中，并保留原始输入的引号和换行，再交由 ACP prompt 处理。运行中追加指示复用既有 steer 入口，消息身份与普通发送共享去重记录。认证状态查询说明认证来自实例模型网关，资源查询返回当前命令；其他通用操作只在 Agent 明确提供对应能力时可用。
+
+## 同步、恢复与进程
+
+通用应用层经 SQLite 事务保存操作事实与 outbox；同步服务按序发送，收到 ACK 后删除。投影将 ACP 文本、思考、工具与来源信息转换为平台 Timeline。PiClient 补充平台消息身份与附件元数据，使执行观察与用户消息投影关联。
+
+恢复创建新的连接代际，重新连接同一原生会话，核验 Agent 保证和返回身份，再更新配置与绑定。只有 Agent 宣告 `durable_prompt_receipts` 时才查询持久接纳回执；默认 PiClient 只宣告 `managed_tool_permissions`，没有该保证。不能以通用恢复分支存在推定未知消息已被确认。
+
+启动采用后台准备，沿用 Runtime 的「正在准备」状态与失败重试；环境就绪前不开放运行能力，下载不会占满启动 RPC 的等待时间。
+
+会话使用独立进程，执行配额和超时由协调层管理。关闭先阻止新请求并失效交互，实际释放进程后收敛状态；异常退出进入恢复状态。进程监督实现包括 POSIX 进程组和 Windows Job，相关受控检查入口见下文。
+
+## 通用 ACP 与组件管理的定位
+
+| 代码 | 当前用途 |
+| --- | --- |
+| `connector/connector/runtimes/acp/` | 默认 Pi 与其他 Profile 共用的 ACP 适配、协调和同步 |
+| 通用 `AcpProvider` 组件服务 | 签名清单、安装、激活、回退和引用保护；与 PiProvider 的 npm 安装路径不同 |
+
+通用组件服务的正式发布索引和受信公钥当前为空。默认 Pi 直接使用 npm 发布包，无需等待签名组件；TUI 协作、最终模型请求守卫、持久接纳回执和原生位置选择未在默认路径开放。通用原生历史快照按来源完整性处理，不能用部分结果删除其他历史；默认 Pi 没有独立的原生位置选择界面。
+
+## 源码与维护入口
+
+- [默认 Provider 注册](../../connector/connector/runtimes/providers.py)
+- [Pi Provider 与固定依赖](../../connector/connector/runtimes/acp/profiles/pi/provider.py)、[配置生成](../../connector/connector/runtimes/acp/profiles/pi/settings.py)
+- [PiClient](../../connector/connector/runtimes/acp/profiles/pi/client.py)、[工具权限扩展](../../connector/connector/runtimes/acp/profiles/pi/permissions.mjs)
+- [npm / Node 安装器](../../connector/connector/runtimes/acp/infrastructure/npm.py)
+- [通用 Runtime](../../connector/connector/runtimes/acp/runtime.py)、[会话用例](../../connector/connector/runtimes/acp/application/sessions.py)、[同步](../../connector/connector/runtimes/acp/application/synchronization.py)
+- [工作流契约](../../contracts/runtime-workflows/1.2/manifest.json)、[ACP 增强契约说明](../../contracts/acp-runtime/1.1/README.md)
+
+在 `connector/` 可运行下列受控检查。它们是检查入口，不是本文整理时的执行结果；受控 Peer 不代替默认 Pi 发布包的实际运行。
 
 ```sh
-uv run ruff check connector/runtimes/acp scripts/*acp*.py
 uv run python scripts/verify-acp-runtime.py
+uv run python scripts/verify-acp-generic-boundary.py
 uv run python scripts/verify-acp-processes.py
 uv run python scripts/verify-acp-components.py
 uv run python scripts/verify-acp-packaging.py
-uv run pytest -q
 ```
 
-Server 路由边界探针（受控 service ports，不冒充真实数据库业务链路）：
+实现变更时同步更新本页，不再追加按轮次记录的完成声明、旧引擎验证结果或已失效的实施顺序。
 
-```sh
-cd server
-PYTHONPATH=. uv run python scripts/verify_acp_api.py
-```
-
-| 检查 | 本机观察结果 |
-| --- | --- |
-| 官方 SDK → 受控 Peer → SQLite/outbox | 初始化回答、工具权限、结构化表单、流式更新、重复提交、ACK 保留和异常退出通过；没有真实模型请求 |
-| 组件与打包 | 临时 Ed25519 签名、篡改拒绝、不可变安装、激活／回退、会话固定旧组件及引用保护通过；两次打包字节一致；临时私钥未进入组件 |
-| macOS arm64 进程 | 主动关闭及父进程被杀后，Agent 与后代进程均退出 |
-| HTTP 路由 | 设备授权拒绝不转发 RPC；配置 false／空字符串保留；数字冒充布尔值拒绝；超时提示查询原更新操作 |
-| Connector 全量现有测试 | 更新两处过时 Provider 清单断言后，1278 通过；用户明确授权只修改这两处测试 |
-| Web / Electron | 类型检查与 protocol:check 通过 |
-| Android | `:app:compileDebugKotlin` 通过 |
-| iOS | 表单领域文件类型检查、修改的 SwiftUI/API 文件语法解析通过；本机只有 CommandLineTools，无法执行完整 Xcode 构建 |
-| Server 启动 | 一次性 PostgreSQL 迁移至 v2_45，正式 create_app lifespan 启动通过；架构检查 2 通过 |
-| Server 全量现有测试 | 984 通过、14 跳过、2 失败；失败是迁移版本仍断言 v2_44，以及目录 RPC 的旧预期未包含 sessionId。没有修改这两处 Server 测试，也没有跳过它们 |
-
-CI 新增三操作系统的 ACP 协调探针矩阵；这里只记录本机 macOS 的结果，不把工作流定义当成远端运行结果。
-
-执行者组件引用在启动前持久化，确认进程关闭后才释放。重启遗留但尚未核验释放的执行者引用保守阻止组件删除；不能按 PID、TTL 或删除锁文件强行清理。该引用的重启核验收敛仍需随完整 Agent 恢复用例实现。
-
-## 继续实施顺序
-
-1. 完善通用恢复、来源替换、组件状态页面及高级能力用例；保持能力门禁。
-2. 等待上游正式公开所需钩子，固定版本与提交，实施 `pi-acp-agent` 全部增强。
-3. 生成六个平台架构的固定组件，核验原生进程／写锁和共享数据兼容。
-4. 完成四端受控业务链路与完整 Pi 首发验收后，才配置正式公钥／发布源并开放入口。
-
-本次不提交或推送代码、不发上游 PR、不发布组件，不调用真实供应商。完整计划的剩余项不能仅归因于上游；上表明确列出了仍可独立推进的通用工作。
+默认 Pi 的直接功能检查为 `PYTHONPATH=connector connector/.venv/bin/python connector/scripts/verify-pi-managed.py --scenario allow`；另有 `deny`、`readonly`、`attachment`、`steer`、`slow`、`reasoning` 和 `interrupt` 场景，使用真实 OpenMA/Pi 包与本地 SSE 模型，不调用付费供应商。

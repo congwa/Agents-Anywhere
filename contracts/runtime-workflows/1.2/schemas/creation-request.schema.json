@@ -1,8 +1,78 @@
 {
+  "$defs": {
+    "InlineAttachmentRef": {
+      "properties": {
+        "contentBase64": {
+          "minLength": 1,
+          "title": "Contentbase64",
+          "type": "string"
+        },
+        "fileId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Fileid",
+          "type": "string"
+        },
+        "mediaType": {
+          "default": "application/octet-stream",
+          "maxLength": 255,
+          "title": "Mediatype",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "required": [
+        "fileId",
+        "name",
+        "contentBase64"
+      ],
+      "title": "InlineAttachmentRef",
+      "type": "object"
+    }
+  },
   "$id": "urn:agents-anywhere:runtime-workflows:1.2:creation-request",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "attachments": {
+      "items": {
+        "$ref": "#/$defs/InlineAttachmentRef"
+      },
+      "maxItems": 10,
+      "title": "Attachments",
+      "type": "array"
+    },
     "catalogRevision": {
       "maximum": 9007199254740991,
       "minimum": 0,
@@ -40,7 +110,6 @@
     },
     "content": {
       "maxLength": 1000000,
-      "minLength": 1,
       "title": "Content",
       "type": "string"
     },

@@ -1,5 +1,6 @@
 "use client"
 import * as React from "react"
+import { useTranslations } from "next-intl"
 import { StructuredAgentFields } from "./structured-agent-fields"
 import { formDefaults, formErrors, type FormSchema } from "@/features/dashboard/runtime-forms"
 import { Button } from "@/components/ui/button"
@@ -33,7 +34,7 @@ export function RuntimeInteractionForm({ request, pending, onRespond }: {
       {request.kind === "editor" ? <Textarea id={fieldId} value={text} onChange={event => setText(event.target.value)} disabled={pending} />
         : request.kind === "input" ? <Input id={fieldId} value={text} onChange={event => setText(event.target.value)} disabled={pending} />
         : request.kind === "confirm" ? <Checkbox id={fieldId} checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} disabled={pending} />
-        : request.kind === "select" ? <Select value={selected} onValueChange={setSelected} disabled={pending}><SelectTrigger id={fieldId}><SelectValue placeholder="请选择" /></SelectTrigger><SelectContent><SelectGroup>{options.map(option => <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>)}</SelectGroup></SelectContent></Select> : null}
+        : request.kind === "select" ? <Select value={selected} onValueChange={setSelected} disabled={pending}><SelectTrigger id={fieldId}><SelectValue placeholder="" /></SelectTrigger><SelectContent><SelectGroup>{options.map(option => <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>)}</SelectGroup></SelectContent></Select> : null}
     </Field>
     {request.kind === "form" ? <StructuredAgentFields schema={schema} values={formValues} onChange={setFormValues} disabled={pending} /> : null}
     <div className="flex flex-wrap gap-2">{request.actions.map(action => <Button key={action.actionId} variant={action.style === "danger" ? "destructive" : action.style === "primary" ? "default" : "outline"} disabled={pending || (action.actionId === "submit" && request.kind === "select" && !selected) || (action.actionId === "accept" && request.kind === "form" && !formValid)} onClick={() => onRespond(action.actionId, action.actionId === "submit" || action.actionId === "accept" ? value() : undefined)}>{action.label}</Button>)}</div>
@@ -45,11 +46,16 @@ export function RuntimeWorkflowPanel({ operation, pending, error, onRespond, onC
   onRespond: (request: WorkflowInteraction, actionId: string, input?: RuntimeDialogValue) => void;
   onCancel: () => void; onRefresh?: () => void; onDismiss?: () => void;
 }) {
-  return <Alert><AlertTitle>{operation.kind === "preparation" ? "工作区准备" : "创建会话"} · {operation.state.phase}</AlertTitle><AlertDescription className="flex flex-col gap-3">
-    {operation.state.interactions.filter(request => request.status === "open").map(request => <RuntimeInteractionForm key={request.interactionId + request.ownerGeneration} request={request} pending={pending} onRespond={(action, input) => onRespond(request, action, input)} />)}
+  const tCommon = useTranslations("common")
+  const requests = operation.state.interactions.filter(request => request.status === "open")
+  const failure = error ?? operation.state.failure?.message
+  const stopped = ["failed", "cancelled", "rejected", "expired", "outcome_unknown"].includes(operation.state.phase)
+  if (!requests.length && !failure && !stopped) return null
+  return <Alert><AlertTitle>{requests[0]?.title ?? tCommon(operation.kind === "preparation" ? "loadFailed" : "createFailed")}</AlertTitle><AlertDescription className="flex flex-col gap-3">
+    {requests.map(request => <RuntimeInteractionForm key={request.interactionId + request.ownerGeneration} request={request} pending={pending} onRespond={(action, input) => onRespond(request, action, input)} />)}
     {error || operation.state.failure ? <p role="alert">{error ?? operation.state.failure?.message}</p> : null}
-    {onRefresh ? <Button variant="outline" size="sm" disabled={pending} onClick={onRefresh}>查询最新状态</Button> : null}
-    {onDismiss && ["failed", "cancelled", "rejected", "outcome_unknown"].includes(operation.state.phase) ? <Button variant="outline" size="sm" onClick={onDismiss}>关闭并保留草稿</Button> : null}
-    {operation.state.canCancel || operation.state.canCancelInitialization ? <Button variant="outline" size="sm" disabled={pending} onClick={onCancel}>取消</Button> : null}
+    {onRefresh ? <Button variant="outline" size="sm" disabled={pending} onClick={onRefresh}>{tCommon("refresh")}</Button> : null}
+    {onDismiss && ["failed", "cancelled", "rejected", "outcome_unknown"].includes(operation.state.phase) ? <Button variant="outline" size="sm" onClick={onDismiss}>{tCommon("close")}</Button> : null}
+    {operation.state.canCancel || operation.state.canCancelInitialization ? <Button variant="outline" size="sm" disabled={pending} onClick={onCancel}>{tCommon("cancel")}</Button> : null}
   </AlertDescription></Alert>
 }

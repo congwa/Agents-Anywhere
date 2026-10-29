@@ -104,7 +104,7 @@ struct NewSessionView: View, Equatable {
     private var statusContent: some View {
         VStack(alignment: .leading, spacing: 28) {
             connectionStatus
-            if model.hasPendingWorkflow { Button("查询未完成的创建") { Task { if let session = await model.resumeWorkflow() { onCreated(session) } } }.disabled(model.isResumingWorkflow) }
+            if model.hasPendingWorkflow { Button(String(localized: "重试")) { Task { if let session = await model.resumeWorkflow() { onCreated(session) } } }.disabled(model.isResumingWorkflow) }
             if let workflow = model.runtimeWorkflow {
                 RuntimeWorkflowView(operation: workflow, pending: model.workflowResponding,
                     onRespond: { request, action, input in Task { await model.respondWorkflow(request, action: action, input: input) } },
@@ -113,9 +113,6 @@ struct NewSessionView: View, Equatable {
             if model.isCreating {
                 Label(String(localized: "正在创建会话…"), appSymbol: "arrow.up.circle")
                     .font(.subheadline).foregroundStyle(.secondary)
-            }
-            if let schema = model.agentConfigurationSchema {
-                StructuredAgentFields(schema: schema, values: $model.agentConfigurationValues, disabled: model.isCreating || model.isPreparing)
             }
             if let error = model.error {
                 VStack(alignment: .leading, spacing: 12) {

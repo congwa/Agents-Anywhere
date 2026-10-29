@@ -319,6 +319,8 @@ fun NewSessionScreen(
 
     var preparedRuntimeWorkspace by remember(selectedDevice?.id, selectedRuntime?.id, selectedWorkspacePath, selectedProjectId) { mutableStateOf<com.agentsanywhere.app.feature.sessions.PreparedRuntimeWorkspace?>(null) }
     var preparingRuntime by remember { mutableStateOf(false) }
+    var preparationError by remember(selectedDevice?.id, selectedRuntime?.id, selectedWorkspacePath, selectedProjectId) { mutableStateOf<String?>(null) }
+    var preparationRetry by remember { mutableStateOf(0) }
     val needsWorkspacePreparation = runtimeSelection.capabilities.data?.find("runtime.workspace.prepare", selectedRuntime?.id.orEmpty(), selectedRuntime?.type)?.usable == true
 
     suspend fun loadRuntimeDetails() {
@@ -338,7 +340,7 @@ fun NewSessionScreen(
         if (runtimeSelection.requestKey != requestKey) return
 
         coroutineScope {
-            val modelRequest = if (runtimeSelection.canUseModelCatalog) {
+            val modelRequest = if (runtimeSelection.canUseModelCatalog && capabilities.find("runtime.workspace.prepare", runtimeId, runtimeSelection.selectedRuntime?.type)?.usable != true) {
                 async { onLoadModelCatalog(connectorId, runtimeId) }
             } else {
                 null
@@ -498,7 +500,27 @@ fun NewSessionScreen(
     } else {
         effectiveWorkspacePath.isNotBlank()
     }
-    val catalogsLoading = selectedRuntime != null && (
+    LaunchedEffect(selectedDevice?.id, selectedRuntime?.id, effectiveWorkspacePath, selectedProjectId, needsWorkspacePreparation, workspaceReady, preparationRetry) {
+        if (needsWorkspacePreparation && workspaceReady && selectedDevice != null && selectedRuntime != null) {
+            preparingRuntime = true
+            preparationError = null
+            try {
+                val device = selectedDevice ?: return@LaunchedEffect
+                val runtime = selectedRuntime ?: return@LaunchedEffect
+                val path = effectiveWorkspacePath
+                val project = workspaceProject(projects, device.id, path, device.deviceOs)
+                    ?: onCreateProject(workspaceProjectName(path), device.id, path).getOrThrow()
+                val result = onPrepareRuntimeWorkspace(device.id, runtime.id, project.id).getOrThrow()
+                if (selectedRuntime?.id == runtime.id && selectedDevice?.id == device.id && effectiveWorkspacePath == path) {
+                    preparedRuntimeWorkspace = result
+                    runtimeSelection.requestKey?.let { runtimeSelection = runtimeSelection.applyModelCatalog(it, result.catalog) }
+                }
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { preparationError = error.message ?: context.getString(R.string.new_session_model_catalog_failed) }
+            finally { preparingRuntime = false }
+        }
+    }
+    val catalogsLoading = preparingRuntime || selectedRuntime != null && (
         !runtimeSelection.capabilities.loaded ||
             runtimeSelection.capabilities.loading ||
             runtimeSelection.modelCatalog.loading ||
@@ -1019,30 +1041,6 @@ fun NewSessionScreen(
                         .padding(start = 18.dp, end = 18.dp, bottom = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                if (needsWorkspacePreparation) TextButton(enabled = !preparingRuntime && selectedDevice != null && selectedRuntime != null, onClick = {
-                    scope.launch {
-                        preparingRuntime = true
-                        try {
-                            val device = selectedDevice ?: return@launch
-                            val runtime = selectedRuntime ?: return@launch
-                            val path = effectiveWorkspacePath
-                            val project = workspaceProject(projects, device.id, path, device.deviceOs)
-                                ?: onCreateProject(workspaceProjectName(path), device.id, path).getOrThrow()
-                            val result = onPrepareRuntimeWorkspace(device.id, runtime.id, project.id).getOrThrow()
-                            if (selectedRuntime?.id == runtime.id && selectedDevice?.id == device.id && effectiveWorkspacePath == path) {
-                                preparedRuntimeWorkspace = result
-                                runtimeSelection.requestKey?.let { runtimeSelection = runtimeSelection.applyModelCatalog(it, result.catalog) }
-                            }
-                        } catch (error: CancellationException) { throw error }
-                        catch (error: Exception) { projectCreateError = error.message }
-                        finally { preparingRuntime = false }
-                    }
-                }) { Text("准备工作区并加载模型") }
-                preparedRuntimeWorkspace?.configurationSchema?.let { schema ->
-                    StructuredAgentFields(org.json.JSONObject(schema), preparedRuntimeWorkspace!!.configurationValues, !preparingRuntime) { key, value ->
-                        preparedRuntimeWorkspace = preparedRuntimeWorkspace?.let { current -> current.copy(configurationValues = if (value == null) current.configurationValues - key else current.configurationValues + (key to value)) }
-                    }
-                }
                 val runtimeError = when {
                     checkingDevices || checkingAgents || inventory.loading -> null
                     onlineDevices.isEmpty() -> stringResource(R.string.new_session_no_online_agent)
@@ -1065,7 +1063,7 @@ fun NewSessionScreen(
                         stringResource(R.string.new_session_catalog_stale)
                     else -> null
                 }
-                val error = runtimeError
+                val error = preparationError ?: runtimeError
                 error?.let {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -1088,7 +1086,9 @@ fun NewSessionScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.noRippleClickable {
                                     scope.launch {
-                                        if (selectedDevice == null || runtimeSelection.runtimesErrorMessage != null ||
+                                        if (preparationError != null) {
+                                            preparationRetry++
+                                        } else if (selectedDevice == null || runtimeSelection.runtimesErrorMessage != null ||
                                             runtimeSelection.runtimes.isEmpty()
                                         ) {
                                             inventory.refresh()

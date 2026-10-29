@@ -28,6 +28,8 @@ class RuntimeWorkflowRequest:
         "get_tree",
         "select_position",
         "close_session",
+        "recover_session",
+        "agent_operation",
     ]
     values: Mapping[str, Any] = field(default_factory=dict)
 

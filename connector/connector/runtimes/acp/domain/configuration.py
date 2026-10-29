@@ -51,6 +51,14 @@ class ConfigurationSnapshot:
                 )
 
     def merge_legacy(self, values: dict, selections: dict) -> dict:
+        from .catalogs import decode_selection
+
+        selections = dict(selections)
+        if selections.get("model") is not None:
+            decoded = decode_selection(selections["model"])
+            if "effort" in decoded and selections.get("effort") not in (None, decoded["effort"]):
+                raise AcpError("configuration_conflict", "模型选择与推理强度不一致。")
+            selections.update(decoded)
         merged = dict(values)
         for category, value in selections.items():
             if value is None:

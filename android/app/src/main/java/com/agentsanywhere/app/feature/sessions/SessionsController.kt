@@ -175,11 +175,15 @@ class SessionsController(
             try {
                 val prepared = draft.preparedWorkspace
                 if (prepared != null) {
-                    require(draft.attachments.isEmpty()) { "此 Runtime 尚未启用附件。" }
                     val value = workflows.run("creations", org.json.JSONObject().put("preparationId", prepared.preparationId)
                         .put("createOperationId", draft.clientMessageId).put("clientMessageId", draft.clientMessageId)
                         .put("expectedRevision", prepared.expectedRevision).put("catalogRevision", prepared.catalogRevision)
                         .put("selections", org.json.JSONObject(draft.selections.toMap())).put("content", draft.content).apply {
+                            if (draft.attachments.isNotEmpty()) put("attachments", org.json.JSONArray(draft.attachments.map { part ->
+                                val item = part.toInlineAttachmentRef()
+                                org.json.JSONObject().put("fileId", item.fileId).put("name", item.name).put("mediaType", item.mediaType)
+                                    .put("size", item.size).put("sha256", item.sha256).put("contentBase64", item.contentBase64)
+                            }))
                             if (prepared.configurationSchema != null) put("configuration", org.json.JSONObject(prepared.configurationValues))
                         }) { it.optBoolean("messageAccepted") }
                     val session = bindAcceptedWorkflowSession(devices)

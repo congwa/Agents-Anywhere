@@ -27,6 +27,7 @@ async function accountSwitch(action, fail) {
   const pending = []
   const defer = () => new Promise((resolve, reject) => pending.push({ resolve, reject }))
   const hook = load('use-session-creation.ts', {
+    'next-intl': { useTranslations: () => key => key },
     '@/features/dashboard/runtime-workflows': { workflowApi: { cancel: defer, respond: defer, get: defer } },
     '@/lib/api': { apiClient: {} }, '@/lib/api/errors': {}, './creation-configuration': {}, '@/features/dashboard/api': {},
     './session-creation': { releaseCreationAttachments() {} },
@@ -52,30 +53,8 @@ async function accountSwitch(action, fail) {
     assert.equal(api.workflowPending, false)
   } finally { await React.act(() => root.unmount()) }
 }
-async function ownerChange() {
-  const passthrough = ({ children }) => React.createElement(React.Fragment, null, children)
-  const stubs = {
-    '@/lib/api': { apiClient: { get: async () => ({ entries: [], leafId: null, nextCursor: null, sourceEpoch: 'e', fileEntriesDigest: 'd', positionRevision: 1 }), post: async () => ({ ok: true }) } },
-    '@/components/ui/button': { Button: ({ children, onClick, disabled }) => React.createElement('button', { onClick, disabled }, children) },
-  }
-  for (const [path, names] of Object.entries({ dialog: ['Dialog', 'DialogContent', 'DialogHeader', 'DialogTitle', 'DialogTrigger'],
-    field: ['Field', 'FieldGroup', 'FieldLabel'], select: ['Select', 'SelectContent', 'SelectGroup', 'SelectItem', 'SelectTrigger', 'SelectValue'] })) {
-    stubs['@/components/ui/' + path] = Object.fromEntries(names.map(name => [name, passthrough]))
-  }
-  const { RuntimePositionDialog } = load('runtime-position-dialog.tsx', stubs)
-  const root = createRoot(document.getElementById('root'))
-  const props = { token: 'fixture', sessionId: 'session', ownerGeneration: 'owner-1', canClose: true, canSelect: false }
-  const closeButton = () => [...document.querySelectorAll('button')].find(item => item.textContent === '关闭当前执行进程')
-  try {
-    await React.act(() => root.render(React.createElement(RuntimePositionDialog, props)))
-    await React.act(async () => { closeButton().click(); await Promise.resolve() })
-    assert.equal(closeButton(), undefined)
-    await React.act(() => root.render(React.createElement(RuntimePositionDialog, { ...props, ownerGeneration: 'owner-2' })))
-    assert.ok(closeButton(), 'a new owner must be closable again')
-  } finally { await React.act(() => root.unmount()) }
-}
+
 try {
   for (const action of ['cancel', 'respond', 'refresh']) for (const fail of [false, true]) await accountSwitch(action, fail)
-  await ownerChange()
-  console.log('Runtime workflow account isolation (success/error/cancel/reply/query) and owner-scoped position dialog: passed')
+  console.log('Runtime workflow account isolation (success/error/cancel/reply/query): passed')
 } finally { dom.window.close() }

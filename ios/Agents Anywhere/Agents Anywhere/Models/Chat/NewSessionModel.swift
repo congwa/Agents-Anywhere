@@ -36,7 +36,6 @@ final class NewSessionModel {
     @ObservationIgnored private let workflowAPI: V2RuntimeWorkflowAPI?
     @ObservationIgnored private var preparedWorkflow: V2RuntimeWorkflow?
     var agentConfigurationValues: [String: JSONValue] = [:]
-    var agentConfigurationSchema: JSONValue? { preparedWorkflow?.state.configuration.map { AgentForm.configurationSchema($0) } }
     private(set) var prepared: V2PreparedSession?
     private(set) var isPreparing = false
     private(set) var isCreating = false
@@ -429,11 +428,21 @@ final class NewSessionModel {
             didSubmit = true
             let response: V2SessionCreateResponse
             if let preparedWorkflow, let workflowAPI {
-                guard files.isEmpty, let catalogRevision = preparedWorkflow.state.catalogRevision else { throw HTTPError.invalidResponse }
+                guard let catalogRevision = preparedWorkflow.state.catalogRevision else { throw HTTPError.invalidResponse }
                 var body: [String: JSONValue] = ["preparationId": .string(preparedWorkflow.id), "createOperationId": .string(submission.pending.id),
                     "expectedRevision": .number(Double(preparedWorkflow.state.revision)), "catalogRevision": .number(Double(catalogRevision)),
                     "clientMessageId": .string(submission.pending.id), "content": .string(text),
                     "selections": .object(Dictionary(uniqueKeysWithValues: settings.selections.map { ($0.key.rawValue, .string($0.value)) }))]
+                if !files.isEmpty {
+                    body["attachments"] = .array(files.map { file in
+                        let item = file.local
+                        var fields: [String: JSONValue] = ["fileId": .string(item.fileId), "name": .string(item.name),
+                            "mediaType": .string(item.mediaType), "size": .number(Double(item.data.count)),
+                            "contentBase64": .string(item.data.base64EncodedString())]
+                        if let checksum = item.sha256 { fields["sha256"] = .string(checksum) }
+                        return .object(fields)
+                    })
+                }
                 body["title"] = .string(String(text.prefix(80)))
                 if preparedWorkflow.state.configuration != nil { body["configuration"] = .object(chosenConfiguration) }
                 preference.pendingWorkflowIDs = Array(Set((preference.pendingWorkflowIDs ?? []) + [submission.pending.id])); persist()

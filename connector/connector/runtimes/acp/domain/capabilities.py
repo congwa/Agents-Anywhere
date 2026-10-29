@@ -14,8 +14,8 @@ def verified_release(profile: AgentProfile, manifest: dict) -> bool:
     return (
         manifest.get("profileId") == profile.id
         and profile.required_guarantees <= frozenset(manifest.get("guarantees", []))
-        and REQUIRED_WORK_DEVICES <= frozenset(acceptance.get("workDevices", []))
-        and REQUIRED_CLIENTS <= frozenset(acceptance.get("clients", []))
+        and profile.required_work_devices <= frozenset(acceptance.get("workDevices", []))
+        and profile.required_clients <= frozenset(acceptance.get("clients", []))
     )
 
 

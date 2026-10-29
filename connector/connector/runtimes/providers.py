@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from connector.runtime_protocol import RuntimeProvider
-from connector.runtimes.acp.provider import AcpProvider
+from connector.runtimes.acp.profiles.pi.provider import pi_acp_provider
 from connector.runtimes.claude.provider import ClaudeProvider
 from connector.runtimes.codex.provider import CodexProvider
 from connector.runtimes.dsh.provider import DshProvider
-from connector.runtimes.pi.provider import PiProvider
 
 
 def default_runtime_providers() -> tuple[RuntimeProvider, ...]:
-    return (CodexProvider(), ClaudeProvider(), DshProvider(), PiProvider(), AcpProvider())
+    return (CodexProvider(), ClaudeProvider(), DshProvider(), pi_acp_provider())

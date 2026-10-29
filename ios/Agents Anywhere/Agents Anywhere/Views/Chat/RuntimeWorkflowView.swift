@@ -7,12 +7,10 @@ struct RuntimeWorkflowView: View {
     let onCancel: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(operation.kind == "preparation" ? "工作区准备" : "创建会话").font(.headline)
-            Text(operation.state.phase).font(.caption).foregroundStyle(.secondary)
             ForEach(operation.state.interactions.filter { $0.status == "open" }) { request in
                 RuntimeWorkflowInput(request: request, pending: pending) { action, value in onRespond(request, action, value) }
             }
-            if operation.state.canCancel == true || operation.state.canCancelInitialization == true {
+            if operation.state.interactions.contains(where: { $0.status == "open" }) && (operation.state.canCancel == true || operation.state.canCancelInitialization == true) {
                 Button("取消", role: .cancel, action: onCancel).disabled(pending)
             }
         }

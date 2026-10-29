@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    model_validator,
+)
+
+from .models import InlineAttachmentRef
 
 Identity = str
 
@@ -52,8 +61,15 @@ class BeginCreationRequest(BaseModel):
         default=None, max_length=128
     )
     clientMessageId: str = Field(min_length=1, max_length=160)
-    content: str = Field(min_length=1, max_length=1000000)
+    content: str = Field(max_length=1000000)
+    attachments: list[InlineAttachmentRef] = Field(default_factory=list, max_length=10)
     title: str | None = Field(default=None, max_length=4096)
+
+    @model_validator(mode="after")
+    def require_message(self):
+        if not self.content.strip() and not self.attachments:
+            raise ValueError("消息和附件不能同时为空。")
+        return self
 
 
 class WorkflowInteractionResponse(BaseModel):
@@ -97,3 +113,21 @@ class UpdateAgentConfigurationRequest(BaseModel):
     expectedRevision: int = Field(ge=0, le=9007199254740991)
     operationId: str = Field(min_length=1, max_length=160)
     values: dict[str, StrictStr | StrictBool] = Field(max_length=128)
+
+
+class AgentOperationRequest(BaseModel):
+    """Agent-independent operations; credentials are never accepted here."""
+    model_config = ConfigDict(extra="forbid")
+    operation: Literal[
+        "authentication.status", "resources.get", "resources.reload", "queue.get", "queue.clear",
+        "message.follow_up", "session.rename", "session.fork", "directories.add", "tools.set",
+    ]
+    operationId: str = Field(min_length=1, max_length=160)
+    expectedGeneration: str = Field(min_length=1, max_length=160)
+    values: dict[str, Any] = Field(default_factory=dict, max_length=128)
+
+
+class RecoverRuntimeSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operationId: str = Field(min_length=1, max_length=160)
+    expectedGeneration: str = Field(min_length=1, max_length=160)

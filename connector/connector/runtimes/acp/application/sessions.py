@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
-from ..domain.definitions import AcpError, Workspace, fingerprint
+from ..domain.definitions import (
+    AcpError,
+    PromptRejectedBeforeDispatch,
+    Workspace,
+    fingerprint,
+)
 from ..domain.operations import CreationOperation, PromptOperation, require_same_input
 from ..domain.preparations import Preparation
 from ..domain.sessions import SessionBinding
@@ -32,11 +38,13 @@ class SessionService:
         max_runs=4,
         max_run_seconds=600,
         preparation_driver=None,
+        runtime_type=None,
     ):
         self.store, self.profile, self.launch = store, profile, launch
+        self.runtime_type = runtime_type or profile.id
         self.client_factory, self.projection_factory, self.root = (
             client_factory,
-            projection_factory,
+            partial(projection_factory, runtime_type=self.runtime_type),
             root,
         )
         self.max_workers, self.max_runs, self.max_run_seconds = (
@@ -48,11 +56,15 @@ class SessionService:
         self.sessions: dict[str, dict] = {}
         self.tasks: set[asyncio.Task] = set()
         self.active_runs: set[str] = set()
+        self.inventory_context = None
+        self.inventory_lock = asyncio.Lock()
+        self.recovery_locks: dict[str, asyncio.Lock] = {}
         self.configurations = ConfigurationService(store)
         self.prompts = PromptService(store)
         self.interactions = InteractionService(store, self._notice)
         self.stopping = False
         self.on_binding_changed = None
+        self.materialize_attachments = None
         self.preparation_driver = preparation_driver or SessionPreparation()
 
     def start_background(self):
@@ -92,7 +104,7 @@ class SessionService:
         return task
 
     def _emit(self, method: str, params: dict):
-        return self.store.emit(method, {**params, "runtime": "acp"})
+        return self.store.emit(method, {**params, "runtime": self.runtime_type})
 
     def _notice(self, context: dict, interaction):
         if not context.get("sessionId"):
@@ -240,24 +252,31 @@ class SessionService:
                 "cancelling": "stopping",
             }.get(row["foreground"], row["foreground"])
         )
+        from ..domain.catalogs import selection_id
+        selections = {option["category"]: option["currentValue"]
+                      for option in self.configurations.snapshot(session_id).options
+                      if option.get("category") in {"model", "permission", "effort"}
+                      and isinstance(option.get("currentValue"), str)}
+        if selections.get("model") and selections.get("effort"):
+            selections["model"] = selection_id(selections["model"], selections["effort"])
+        observation = self.store.get("agent_observation", session_id) or {}
         return {
             "sessionId": session_id,
             "externalSessionId": row["agent_session_id"],
-            "runtime": "acp",
+            "runtime": self.runtime_type,
             "status": status,
             "statusReason": "agent_recovery_required" if status == "blocked" else None,
             "metadata": {
+                "agentObservation": observation,
+                "contextUsage": {"used": observation.get("usage_update", {}).get("used"),
+                                 "size": observation.get("usage_update", {}).get("size")},
+                "compaction": observation.get("compaction_update"),
                 "ownerGeneration": row["owner_generation"],
                 "connectionGeneration": row["connection_generation"],
                 "componentReleaseId": row["release_id"],
                 "stateRevision": row["revision"],
             },
-            "selections": {
-                option["category"]: option["currentValue"]
-                for option in self.configurations.snapshot(session_id).options
-                if option.get("category") in {"model", "permission"}
-                and isinstance(option.get("currentValue"), str)
-            },
+            "selections": selections,
         }
 
     def meta(self, session_id: str) -> dict:
@@ -370,27 +389,15 @@ class SessionService:
     def preparation_view(self, key: str) -> dict:
         row = self.store.require("preparation", key)
         options = self.configurations.snapshot(key)
-        models = []
-        for option in options.options:
-            if option.get("category") == "model" and option.get("type") == "select":
-                for choice in option.get("options", []):
-                    for value in choice.get("options", [choice]):
-                        models.append(
-                            {
-                                "id": value["value"],
-                                "selectionId": value["value"],
-                                "title": value["name"],
-                                "reasoningItems": [],
-                                "enabled": True,
-                            }
-                        )
+        from ..domain.catalogs import model_items
+        models = model_items(options)
         return {
             "preparationId": key,
             "phase": row["phase"],
             "revision": row["revision"],
             "catalogRevision": options.revision,
             "catalog": {
-                "runtime": "acp",
+                "runtime": self.runtime_type,
                 "revision": options.revision,
                 "models": models,
             },
@@ -524,6 +531,7 @@ class SessionService:
                 asdict(self.configurations.snapshot(preparation_id)),
             )
             self.store.put("binding", binding.session_id, asdict(binding))
+            self.store.put("binding_capabilities", binding.session_id, context["client"].capabilities)
             self._emit("session.meta.upsert", self.meta(binding.session_id))
             self._save_binding(binding)
         self._job(self._begin_prompt(context, values))
@@ -563,11 +571,17 @@ class SessionService:
                 context["client"],
                 configured,
             )
+            blocks = None
+            if values.get("attachments"):
+                if self.materialize_attachments is None:
+                    raise AcpError("attachments_unsupported", "当前执行者不支持首条附件。")
+                blocks = await self.materialize_attachments(values["sessionId"], values["attachments"])
             await self.submit(
                 values["sessionId"],
                 values["clientMessageId"],
                 values["content"],
                 creation_id=values["createOperationId"],
+                blocks=blocks,
             )
         except Exception as error:  # noqa: BLE001 -- configuration boundary precedes prompt dispatch
             with self.store.transaction():
@@ -603,6 +617,81 @@ class SessionService:
             "canCancelInitialization": row["phase"] in {"opening", "submitting"},
             "failure": row.get("failure"),
         }
+
+    async def inventory_client(self):
+        async with self.inventory_lock:
+            if self.inventory_context and not self.inventory_context["closing"]:
+                return self.inventory_context["client"]
+            context = self._new_context("inventory", Workspace(str(self.root), str(self.root)))
+            try:
+                await context["client"].start(self.launch, str(self.root))
+                self.inventory_context = context
+                self._job(self._watch(context, context["client"].process.process))
+                return context["client"]
+            except BaseException:
+                await self._close_context(context)
+                raise
+
+    async def recover(self, session_id: str) -> dict:
+        """Reconnect the same native session; never resubmit an unknown message."""
+        lock = self.recovery_locks.setdefault(session_id, asyncio.Lock())
+        async with lock:
+            if session_id in self.sessions and not self.sessions[session_id]["closing"]:
+                return self.state(session_id)
+            saved = self.store.require("binding", session_id)
+            binding = self._binding(saved)
+            if not binding.agent_session_id:
+                raise AcpError("agent_session_missing", "原操作尚未确认原生会话身份。")
+            context = self._new_context(session_id, binding.workspace)
+            context.update(sessionId=session_id, agentSessionId=binding.agent_session_id,
+                           projection=self.projection_factory(session_id, context["generation"]))
+            try:
+                await context["client"].start(self.launch, str(self.root))
+                guarantees = frozenset(context["client"].capabilities.get("_meta", {}).get("aa", {}).get("guarantees", []))
+                if not self.profile.required_guarantees <= guarantees:
+                    raise AcpError("agent_guarantees_missing", "当前 Agent 不能满足该会话的恢复保证。")
+                if context["client"].capabilities.get("sessionCapabilities", {}).get("resume") is not None:
+                    # Resume sends only future deltas. Keep the persisted ordering
+                    # and revisions rather than restarting Timeline sequence at one.
+                    context["projection"].items.update({row["id"]: row for row in self.store.values("projection")
+                                                       if row["sessionId"] == session_id})
+                result = await context["client"].resume(
+                    binding.agent_session_id, binding.workspace.canonical_path,
+                    aa={"ownerGeneration": context["generation"],
+                        "permission": self.state(session_id)["selections"].get("permission")},
+                )
+                if result.get("sessionId", binding.agent_session_id) != binding.agent_session_id:
+                    raise AcpError("agent_session_mismatch", "恢复返回了不同的原生会话。")
+                # A durable query may resolve an unknown admission, but never retries it.
+                receipts = []
+                if "durable_prompt_receipts" in guarantees:
+                    for row in self.store.values("prompt"):
+                        if row["session_id"] == session_id and row["message_accepted"] is None:
+                            receipt = await context["client"].extension("aa/get_operation", {
+                                "sessionId": binding.agent_session_id,
+                                "clientMessageId": row["operation_id"],
+                            })
+                            fact = receipt.get("receipt", receipt)
+                            if type(fact.get("messageAccepted")) is bool:
+                                operation = PromptOperation(**row)
+                                receipts.append(operation.accept("agent_durable_receipt") if fact["messageAccepted"] else operation.reject("agent_durable_receipt"))
+                self.sessions[session_id] = context
+                with self.store.transaction():
+                    current = self._binding(self.store.require("binding", session_id))
+                    if current.connection_generation != binding.connection_generation:
+                        raise AcpError("owner_changed", "恢复期间会话执行者已变化。")
+                    for receipt in receipts:
+                        self.prompts.save(receipt)
+                    if "configOptions" in result:
+                        self.configurations.observe(session_id, result["configOptions"])
+                    self._save_binding(replace(current,
+                        owner_generation=context["generation"], connection_generation=context["generation"],
+                        attachment="attached", foreground="idle", revision=current.revision + 1))
+                self._job(self._watch(context, context["client"].process.process))
+                return self.state(session_id)
+            except BaseException:
+                await self._close_context(context)
+                raise
 
     async def submit(
         self,
@@ -671,6 +760,9 @@ class SessionService:
             failed = True
             operation = operation.lose_connection()
             raise
+        except PromptRejectedBeforeDispatch:
+            operation = operation.reject("adapter_rejected_before_dispatch")
+            stop_reason = "refusal"
         except Exception:  # noqa: BLE001 -- v1 errors do not establish pre-insertion rejection
             failed = True
             operation = operation.lose_connection()
@@ -754,8 +846,11 @@ class SessionService:
             binding = self._binding(self.store.require("binding", context["sessionId"]))
             if binding.connection_generation != context["generation"]:
                 return
-            if update.get("sessionUpdate") == "aa_operation_update":
-                receipt = update["receipt"]
+            if update.get("sessionUpdate") in {"aa_operation_update", "aa_execution_observed"}:
+                receipt = update.get("receipt") or {
+                    "ownerGeneration": context["generation"], "sessionId": context["sessionId"],
+                    "clientMessageId": update["clientMessageId"], "messageAccepted": True,
+                }
                 if (
                     receipt.get("ownerGeneration") != context["generation"]
                     or receipt.get("sessionId") != context["sessionId"]
@@ -766,7 +861,7 @@ class SessionService:
                 accepted = receipt.get("messageAccepted")
                 if type(accepted) is bool:
                     self.prompts.save(
-                        operation.accept("agent_durable_receipt")
+                        operation.accept("agent_execution_observed" if update.get("sessionUpdate") == "aa_execution_observed" else "agent_durable_receipt")
                         if accepted
                         else operation.reject("agent_durable_receipt")
                     )
@@ -783,6 +878,13 @@ class SessionService:
                             self.store.put(
                                 "creation", creation["operation_id"], creation
                             )
+                return
+            if update.get("sessionUpdate") in {"usage_update", "session_info_update", "compaction_update", "available_commands_update"}:
+                key = context["sessionId"]
+                observed = self.store.get("agent_observation", key) or {}
+                observed[update["sessionUpdate"]] = update
+                self.store.put("agent_observation", key, observed)
+                self._emit("session.state.updated", self.state(key))
                 return
             item = context["projection"].apply(update)
             if item:

@@ -53,7 +53,8 @@ WORKFLOW_RPC = {
     "session.creation.begin": "begin_creation", "session.creation.get": "get_creation",
     "session.creation.respond": "respond_creation", "session.creation.cancel": "cancel_initialization",
     "interaction.response.get": "get_response", "session.tree": "get_tree", "session.position.select": "select_position",
-    "session.close": "close_session",
+    "session.close": "close_session", "session.recover": "recover_session",
+    "session.agent.operate": "agent_operation",
 }
 
 BackgroundScheduler = Callable[[Any], None]

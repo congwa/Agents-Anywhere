@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..domain.definitions import AcpError
+from ..domain.definitions import AcpError, PromptRejectedBeforeDispatch
 
 
 class AgentCapabilities:
@@ -58,8 +58,11 @@ class AgentCapabilities:
             result = await context["client"].extension(
                 method, {**values, "sessionId": context["agentSessionId"]}
             )
-            failed = result.get("ok") is False
+            failed = result.get("ok") is False and result.get("executionStarted") is not False
             return result
+        except PromptRejectedBeforeDispatch:
+            failed = False
+            raise
         except BaseException:
             failed = True
             raise

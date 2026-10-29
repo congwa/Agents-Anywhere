@@ -44,12 +44,16 @@ async def materialize(host, session_id: str, attachments, root: Path) -> list[di
         verified.append((attachment, content, media_type, checksum))
     blocks = []
     for attachment, content, media_type, checksum in verified:
+        metadata = {"aa": {"attachment": {"fileId": attachment.file_id,
+                    "name": attachment.name or attachment.file_id, "mediaType": media_type,
+                    "size": len(content), "sha256": checksum}}}
         if media_type in IMAGE_TYPES:
             blocks.append(
                 {
                     "type": "image",
                     "data": base64.b64encode(content).decode(),
                     "mimeType": media_type,
+                    "_meta": metadata,
                 }
             )
         else:
@@ -77,6 +81,7 @@ async def materialize(host, session_id: str, attachments, root: Path) -> list[di
                     "name": attachment.name or attachment.file_id,
                     "mimeType": media_type,
                     "size": len(content),
+                    "_meta": metadata,
                 }
             )
     return blocks

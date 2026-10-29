@@ -6,8 +6,9 @@ from ..domain.definitions import fingerprint
 class Projection:
     """Connection-local ACP v1 identities; never merge them across replays."""
 
-    def __init__(self, session_id: str, epoch: str):
+    def __init__(self, session_id: str, epoch: str, *, runtime_type: str):
         self.session_id, self.epoch = session_id, epoch
+        self.runtime_type = runtime_type
         self.items: dict[str, dict] = {}
         self.message_index = 0
         self.current_kind = None
@@ -26,7 +27,7 @@ class Projection:
             item = {
                 **native,
                 "sessionId": self.session_id,
-                "source": {**native["source"], "runtime": "acp"},
+                "source": {**native["source"], "runtime": self.runtime_type},
             }
             item["contentHash"] = "sha256:" + fingerprint(
                 {
@@ -41,7 +42,8 @@ class Projection:
             if self.current_kind != kind:
                 self.message_index += 1
                 self.current_kind = kind
-            key = fingerprint([self.session_id, self.epoch, kind, self.message_index])
+            message_id = update.get("messageId")
+            key = fingerprint([self.session_id, kind, message_id]) if message_id and update.get("aaProjectionVerified") else fingerprint([self.session_id, self.epoch, kind, self.message_index])
             old = self.items.get(key, {})
             content = update.get("content", {})
             if content.get("type") != "text":
@@ -52,18 +54,22 @@ class Projection:
                 "sessionId": self.session_id,
                 "type": "message",
                 "role": "user" if kind == "user_message_chunk" else "assistant",
-                "status": "running",
+                "status": "cancelled" if update.get("_meta", {}).get("aa", {}).get("stopReason") == "aborted" else "failed" if update.get("_meta", {}).get("aa", {}).get("stopReason") == "error" else "done" if update.get("_meta", {}).get("aa", {}).get("boundary") else "running",
                 "content": {
                     "kind": "markdown",
                     "format": "markdown",
                     "text": text,
                     "isThinking": kind == "agent_thought_chunk",
+                    **({"clientMessageId": update["_meta"]["aa"]["clientMessageId"]}
+                       if update.get("_meta", {}).get("aa", {}).get("clientMessageId") else {}),
+                    **({"attachments": update["_meta"]["aa"]["attachments"]}
+                       if update.get("_meta", {}).get("aa", {}).get("attachments") else {}),
                 },
             }
         elif kind in {"tool_call", "tool_call_update"}:
             self.current_kind = None
             tool_id = update["toolCallId"]
-            key = fingerprint([self.session_id, self.epoch, "tool", tool_id])
+            key = fingerprint([self.session_id, "tool", tool_id]) if update.get("aaProjectionVerified") else fingerprint([self.session_id, self.epoch, "tool", tool_id])
             old = self.items.get(key, {})
             content = {
                 **old.get("content", {}),
@@ -75,9 +81,30 @@ class Projection:
             }
             content = {
                 **content,
+                "toolKind": update.get("kind", old.get("content", {}).get("toolKind")),
                 "kind": "tool_call",
                 "title": content.get("title", "Agent tool"),
             }
+            raw_input = content.get("rawInput") or {}
+            if not isinstance(raw_input, dict):
+                raw_input = {}
+            acp_kind = content.get("toolKind") or update.get("kind")
+            if acp_kind == "execute":
+                content["kind"] = "command"
+                if isinstance(raw_input.get("command"), str):
+                    content["command"] = raw_input["command"]
+            if isinstance(content.get("rawOutput"), dict) and isinstance(content["rawOutput"].get("output"), str):
+                content["output"] = content["rawOutput"]["output"]
+            blocks = content.get("content")
+            diffs = [block for block in blocks if isinstance(block, dict) and block.get("type") == "diff"] if isinstance(blocks, list) else []
+            if diffs:
+                content["kind"] = "file_change"
+                content["changes"] = [{
+                    "path": block.get("path", ""),
+                    "kind": "add" if block.get("oldText") is None else "update",
+                    "diff": "\n".join([*("-" + line for line in (block.get("oldText") or "").splitlines()), *("+" + line for line in (block.get("newText") or "").splitlines())]),
+                    "contextual": False,
+                } for block in diffs]
             status = {
                 "in_progress": "running",
                 "completed": "done",
@@ -94,7 +121,7 @@ class Projection:
             }
         else:
             return None
-        item["source"] = {"runtime": "acp", "epoch": self.epoch}
+        item["source"] = {"runtime": self.runtime_type, "epoch": self.epoch}
         item.update(
             orderSeq=old.get("orderSeq", len(self.items) + 1),
             revision=old.get("revision", 0) + 1,

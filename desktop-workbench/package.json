@@ -28,8 +28,7 @@
     "pack": "yarn bundle:uv && yarn bundle:python && yarn build && electron-builder --dir",
     "dist": "node scripts/dist-desktop.mjs",
     "dist:mac": "node scripts/dist-desktop.mjs mac",
-    "dist:win": "node scripts/dist-desktop.mjs win",
-    "runtime:pi:package": "node ../pi-runtime/scripts/package-artifact.mjs"
+    "dist:win": "node scripts/dist-desktop.mjs win"
   },
   "devDependencies": {
     "@types/node": "^24.10.2",
@@ -94,13 +93,6 @@
       {
         "from": "build/python",
         "to": "python",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "../pi-runtime/artifact",
-        "to": "pi-runtime/artifact",
         "filter": [
           "**/*"
         ]

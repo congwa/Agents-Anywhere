@@ -19,7 +19,7 @@ from connector.runtimes.acp.domain.definitions import (
 from connector.runtimes.acp.infrastructure.acp.client import AgentClient
 from connector.runtimes.acp.infrastructure.persistence import Store
 from connector.runtimes.acp.infrastructure.projection import Projection
-from connector.runtimes.acp.provider import AcpProvider
+from connector.runtimes.acp.profiles.pi.provider import pi_acp_provider
 
 
 async def until(predicate, message):
@@ -235,13 +235,14 @@ async def main():
             assert all(
                 row["status"] != "open" for row in app.interactions.views("session")
             )
-            provider = await AcpProvider().discover()
+            provider = await pi_acp_provider().discover()
             assert (
-                provider.available is False
-                and provider.metadata["releaseGate"] == "pi_acp_release_acceptance_pending"
+                provider.available is True
+                and provider.runtime_type == "pi"
+                and provider.metadata["managedInstallation"] is True
             )
             print(
-                "ACP SDK stdio, startup interaction, approval, streaming, stable submission, ACK retention, crash convergence and release gate: passed"
+                "ACP SDK stdio, startup interaction, approval, streaming, stable submission, ACK retention, crash convergence and managed Pi availability: passed"
             )
         finally:
             await app.stop()

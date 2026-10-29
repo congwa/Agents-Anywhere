@@ -2,6 +2,17 @@ import Foundation
 
 struct V2RuntimeWorkflowAPI {
     let transport: any HTTPTransport
+    func operate(sessionID: String, operation: String, generation: String) async throws -> JSONValue {
+        try await transport.send(HTTPRequest<JSONValue, JSONValue>(method: .post,
+            path: "/runtime-workflows/sessions/\(sessionID.v2URLPathComponentEncoded)/operations",
+            body: .object(["operation": .string(operation), "operationId": .string(UUID().uuidString),
+                "expectedGeneration": .string(generation), "values": .object([:])])))
+    }
+    func recover(sessionID: String, generation: String) async throws -> JSONValue {
+        try await transport.send(HTTPRequest<JSONValue, JSONValue>(method: .post,
+            path: "/runtime-workflows/sessions/\(sessionID.v2URLPathComponentEncoded)/recover",
+            body: .object(["operationId": .string(UUID().uuidString), "expectedGeneration": .string(generation)])))
+    }
     func configuration(sessionID: String) async throws -> JSONValue {
         try await transport.send(HTTPRequest<EmptyRequestBody, JSONValue>(method: .get, path: "/runtime-workflows/sessions/\(sessionID.v2URLPathComponentEncoded)/configuration"))
     }

@@ -13,17 +13,30 @@ from connector.runtime_protocol import (
     RuntimeUnavailableError,
 )
 
-from .profiles.pi import PI_PROFILE
+from .domain.definitions import AgentProfile, LaunchDefinition
 
 
 class AcpProvider(RuntimeProvider):
-    runtime_type = "acp"
-    display_name = "ACP Agents"
     implementation_type = "acp-stdio"
     instance_policy = "multiple"
 
-    def __init__(self):
+    def __init__(self, profile: AgentProfile, *, runtime_type=None, preparation_driver=None,
+                 configure_launch=None, config_properties=None, config_defaults=None):
+        self.profile = profile
+        self._runtime_type = runtime_type or profile.id
+        self.preparation_driver = preparation_driver
+        self.configure_launch = configure_launch or (lambda config, host, root: ())
+        self.config_properties = config_properties or {}
+        self.config_defaults = config_defaults or {}
         self._component_services = {}
+
+    @property
+    def runtime_type(self) -> str:
+        return self._runtime_type
+
+    @property
+    def display_name(self) -> str:
+        return self.profile.title
 
     def _components(self, host):
         import hashlib
@@ -43,23 +56,22 @@ class AcpProvider(RuntimeProvider):
             store = Store(root / "coordination.sqlite")
             artifacts = Artifacts(root / "releases", TRUSTED_RELEASE_KEYS)
             self._component_services[key] = ComponentService(
-                store, artifacts, ReleaseFeed(artifacts), profile_ids={PI_PROFILE.id}
+                store, artifacts, ReleaseFeed(artifacts), profile_ids={self.profile.id}
             )
         return self._component_services[key]
 
     async def manage_components(self, host, values):
-        return await self._components(host).execute(dict(values))
+        return await self._components(host).execute({**values, "profileId": values.get("profileId") or self.profile.id})
 
     async def get_config_schema(self):
         return RuntimeConfigSchema(
-            runtime="acp",
+            runtime=self.runtime_type,
             revision=1,
             schema={
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "agentProfileId": {"const": "pi"},
-                    "agentDir": {"type": "string", "minLength": 1},
+                    **self.config_properties,
                     "componentReleaseId": {
                         "type": "string",
                         "pattern": "^[0-9a-f]{64}$",
@@ -78,13 +90,12 @@ class AcpProvider(RuntimeProvider):
                 },
             },
             defaults={
-                "agentProfileId": "pi",
-                "agentDir": str(Path.home() / ".pi" / "agent"),
+                **self.config_defaults,
                 "maxWorkers": 8,
                 "maxConcurrentRuns": 4,
                 "maxRunMs": 600000,
             },
-            metadata={"releaseGate": PI_PROFILE.unavailable_reason},
+            metadata={"releaseGate": self.profile.unavailable_reason},
         )
 
     async def discover(self):
@@ -94,7 +105,7 @@ class AcpProvider(RuntimeProvider):
         installation_error = None
         for service in self._component_services.values():
             for installed in service.store.values("installation"):
-                if verified_release(PI_PROFILE, installed["manifest"]):
+                if verified_release(self.profile, installed["manifest"]):
                     try:
                         service.artifacts.verify_installed(installed)
                     except Exception as error:  # noqa: BLE001 -- damaged installation remains unavailable
@@ -102,12 +113,12 @@ class AcpProvider(RuntimeProvider):
                     else:
                         available = True
         return RuntimeTypeDescriptor(
-            runtime_type="acp",
-            display_name="ACP Agents",
+            runtime_type=self.runtime_type,
+            display_name=self.profile.title,
             available=available,
             reason=None
             if available
-            else "AA Pi ACP 固定组件及三平台、四端统一验收尚未完成。",
+            else f"{self.profile.title} 运行组件尚未就绪。",
             implementation_type=self.implementation_type,
             instance_policy="multiple",
             config_schema=await self.get_config_schema(),
@@ -115,15 +126,19 @@ class AcpProvider(RuntimeProvider):
             if available
             else {},
             metadata={
-                "releaseGate": PI_PROFILE.unavailable_reason,
+                "releaseGate": self.profile.unavailable_reason,
                 "installationError": installation_error,
                 "agentProfiles": [
-                    {"id": "pi", "displayName": "Pi", "available": available}
+                    {"id": self.profile.id, "displayName": self.profile.title, "available": available}
                 ],
             },
         )
 
     async def validate_config(self, values):
+        values = dict(values)
+        legacy_profile = values.pop("agentProfileId", self.profile.id)
+        if legacy_profile != self.profile.id:
+            raise RuntimeInvalidRequestError("Agent 类型与实例不匹配。")
         schema = await self.get_config_schema()
         errors = list(Draft202012Validator(schema.schema).iter_errors(dict(values)))
         if errors:
@@ -132,7 +147,7 @@ class AcpProvider(RuntimeProvider):
         if normalized["maxConcurrentRuns"] > normalized["maxWorkers"]:
             raise RuntimeInvalidRequestError("并发运行数不能超过执行进程数。")
         return RuntimeConfig(
-            runtime="acp",
+            runtime=self.runtime_type,
             revision=1,
             values=normalized,
             schema=schema.schema,
@@ -140,49 +155,34 @@ class AcpProvider(RuntimeProvider):
         )
 
     async def create_runtime(self, config, host):
-        import sys
-
         from .domain.capabilities import verified_release
-        from .domain.definitions import LaunchDefinition
-        from .profiles.pi.preparation import PiPreparation
         from .runtime import AcpRuntime
 
         components = self._components(host)
         selected = config.values.get("componentReleaseId")
         if selected is None:
             selected = (
-                components.store.get("active_component", PI_PROFILE.id) or {}
+                components.store.get("active_component", self.profile.id) or {}
             ).get("releaseId")
         installed = components.store.get("installation", selected) if selected else None
         if not installed:
-            raise RuntimeUnavailableError("AA Pi ACP 尚未安装通过统一验收的固定组件。")
+            raise RuntimeUnavailableError(f"{self.profile.title} 尚未安装通过验收的运行组件。")
         components.artifacts.verify_installed(installed)
         manifest = installed["manifest"]
-        if not verified_release(PI_PROFILE, manifest):
+        if not verified_release(self.profile, manifest):
             raise RuntimeUnavailableError(
-                "AA Pi ACP 组件缺少三平台、四端或执行保证的签名验收记录。"
+                f"{self.profile.title} 组件缺少所需的签名验收记录。"
             )
         root = Path(installed["path"])
         launcher = manifest["launcher"]
         arguments = tuple(
             arg.replace("${COMPONENT_ROOT}", str(root)) for arg in launcher["arguments"]
         )
-        state_root = components.artifacts.root.parent / "agent-state"
         launch = LaunchDefinition(
             str(root / launcher["executable"]),
-            arguments
-            + (
-                "--agent-dir",
-                config.values["agentDir"],
-                "--state-dir",
-                str(state_root),
-                "--runtime-id",
-                config.runtime_id,
-                "--python",
-                sys.executable,
-            ),
+            arguments + tuple(self.configure_launch(config, host, components.artifacts.root.parent)),
             selected,
         )
         return AcpRuntime(
-            config, host, PI_PROFILE, launch, preparation_driver=PiPreparation()
+            config, host, self.profile, launch, preparation_driver=self.preparation_driver
         )
