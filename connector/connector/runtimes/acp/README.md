@@ -2,7 +2,7 @@
 
 此目录是 Connector 的 ACP 防腐层。`domain` 保持纯领域对象，`application` 编排端口，`infrastructure/acp` 使用官方 Python SDK，`profiles` 登记 Agent 特有保证。生产协议仅启用 v1；SDK 的可选扩展开关不代表 ACP v2。
 
-Pi Profile 已登记但不可创建，原因为上游尚缺必要公开扩展点。禁止通过安装后修改依赖绕过发布门禁。旧 `runtimes/pi` 保留。
+Pi 通过组合适配层接入：OpenMA 已公开的能力直接委托，审批、持久回执、模型请求守卫和原生写锁由 AA 执行内核补充；通用 ACP 应用层不依赖 Pi SDK。旧 `runtimes/pi` 与既有会话绑定保留。组件安装和激活仍使用现有签名发行流程。
 
 组件目录与会话使用同一命名空间的协调数据库，发行目录不可变。正式发布源与信任公钥尚未配置；受控探针临时生成自己的密钥，不属于生产信任。
 

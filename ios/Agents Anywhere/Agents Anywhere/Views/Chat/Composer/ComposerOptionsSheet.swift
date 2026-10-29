@@ -20,7 +20,7 @@ struct ComposerOptionsSheet: View {
     @State private var expandedModelID: String?
     @Environment(\.dismiss) private var dismiss
 
-    private enum Page: Hashable { case models, permissions }
+    private enum Page: Hashable { case models, permissions, agentConfiguration }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -34,6 +34,11 @@ struct ComposerOptionsSheet: View {
                     .opacity(canAttach ? 1 : 0.5)
                     if !canAttach {
                         Text(String(localized: "当前运行状态不支持添加附件")).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let chat = sessionChat, chat.canReadAgentConfiguration {
+                        NavigationLink(value: Page.agentConfiguration) {
+                            optionRow("Agent 配置", icon: "slider.horizontal.3", value: "")
+                        }
                     }
                     if isLoading { ProgressView(String(localized: "加载对话选项…")) }
                     if let loadingError {
@@ -88,6 +93,7 @@ struct ComposerOptionsSheet: View {
                 switch page {
                 case .models: models
                 case .permissions: permissions
+                case .agentConfiguration: if let chat = sessionChat { AgentConfigurationView(chat: chat) }
                 }
             }
             .toolbar {

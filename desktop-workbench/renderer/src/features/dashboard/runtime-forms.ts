@@ -28,8 +28,8 @@ export function formErrors(schema: FormSchema, values: Record<string, unknown>):
     }))
   } catch { return { _form: "Agent 表单结构无效" } }
 }
-export function configSchema(configuration: AgentConfiguration): FormSchema {
-  return { type: "object", properties: Object.fromEntries(configuration.options.filter(option => option.category !== "model").map(option => {
+export function configSchema(configuration: AgentConfiguration, includeModel = false): FormSchema {
+  return { type: "object", properties: Object.fromEntries(configuration.options.filter(option => includeModel || option.category !== "model").map(option => {
     const key = option.configId ?? option.id!
     const choices = (option.options ?? []).flatMap(group => "options" in group ? group.options : [group])
     return [key, { type: option.type === "boolean" ? "boolean" : "string", title: option.name, default: option.currentValue, ...(option.type === "select" ? { enum: choices.map(item => item.value), enumNames: choices.map(item => item.name) } : {}) }]

@@ -4,27 +4,26 @@ import { resolve } from 'node:path'
 import { AgentSideConnection, ndJsonStream, RequestError } from '@agentclientprotocol/sdk'
 import { RuntimeFailure } from '@agents-anywhere/pi-execution'
 import { JsonStore } from '@agents-anywhere/pi-execution/storage'
-import { AaPiAgent } from '../application/agent.js'
-import { executionFactory } from '../infrastructure/kernel.js'
-import { openmaVocabulary } from '../infrastructure/openma/index.js'
-import { nativeHistory } from '../infrastructure/history.js'
+import { AcpAgentApplication } from '../application/agent.js'
+import { PiCapabilities } from '../infrastructure/pi-capabilities.js'
+import { AgentFailure } from '../domain/failures.js'
 
 const args = parseArgs({ options: { 'agent-dir': { type: 'string' }, 'state-dir': { type: 'string' },
   'runtime-id': { type: 'string' }, python: { type: 'string' } } }).values
 if (!args['agent-dir'] || !args['state-dir'] || !args['runtime-id'] || !args.python) throw new Error('Missing managed Agent paths or identity')
-let agent: AaPiAgent
+let agent: AcpAgentApplication
 const connection = new AgentSideConnection(conn => {
-  agent = new AaPiAgent({ agentDir: resolve(args['agent-dir']!), stateDir: resolve(args['state-dir']!),
-    runtimeId: args['runtime-id']!, python: args.python!, maxRunMs: 600000 },
-  new JsonStore(resolve(args['state-dir']!, 'coordination')), executionFactory,
+  const settings = { agentDir: resolve(args['agent-dir']!), stateDir: resolve(args['state-dir']!),
+    runtimeId: args['runtime-id']!, python: args.python!, maxRunMs: 600000 }
+  agent = new AcpAgentApplication(settings,
+  new JsonStore(resolve(args['state-dir']!, 'coordination')), new PiCapabilities(settings),
   { update: (sessionId, update) => conn.sessionUpdate({ sessionId, update: update as any }),
     permission: params => conn.requestPermission(params as any), form: params => conn.createElicitation(params as any),
-    notify: (method, params) => conn.notify('_' + method.replace(/^_/, ''), params) }, openmaVocabulary,
-    new JsonStore(resolve(args['state-dir']!, 'worker-state')), nativeHistory)
+    notify: (method, params) => conn.notify('_' + method.replace(/^_/, ''), params) })
   const invoke = async (work: () => Promise<any>) => {
     try { return await work() }
     catch (error) {
-      if (error instanceof RuntimeFailure) throw new RequestError(-32010, error.message, { code: error.code, ...error.details })
+      if (error instanceof RuntimeFailure || error instanceof AgentFailure) throw new RequestError(-32010, error.message, { code: error.code, ...error.details })
       throw error
     }
   }

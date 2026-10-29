@@ -3,7 +3,13 @@ from __future__ import annotations
 import asyncio
 
 from acp import connect_to_agent
-from acp.schema import ClientCapabilities, Implementation, TextContentBlock
+from acp.schema import (
+    ClientCapabilities,
+    ImageContentBlock,
+    Implementation,
+    ResourceContentBlock,
+    TextContentBlock,
+)
 
 from ...domain.definitions import AcpError, LaunchDefinition
 from ..processes import AgentProcess
@@ -56,11 +62,21 @@ class AgentClient:
             await self.connection.new_session(cwd=cwd, mcp_servers=[], **metadata)
         )
 
-    async def prompt(self, session_id: str, text: str, operation_id: str) -> dict:
+    async def prompt(
+        self, session_id: str, text: str, operation_id: str, blocks=None
+    ) -> dict:
         result = wire(
             await self.connection.prompt(
                 session_id=session_id,
-                prompt=[TextContentBlock(type="text", text=text)],
+                prompt=[TextContentBlock(type="text", text=text)]
+                + [
+                    (
+                        ImageContentBlock
+                        if block["type"] == "image"
+                        else ResourceContentBlock
+                    ).model_validate(block)
+                    for block in (blocks or [])
+                ],
                 aa={"clientMessageId": operation_id},
             )
         )

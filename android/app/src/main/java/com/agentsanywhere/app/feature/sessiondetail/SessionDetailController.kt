@@ -27,6 +27,30 @@ class SessionDetailController(
     private val sessionsApi: SessionsApi,
     private val sessionStore: AuthSessionReader,
 ) {
+    private val workflowApi = com.agentsanywhere.app.api.RuntimeWorkflowApi()
+
+    suspend fun agentConfiguration(sessionId: String): Result<JSONObject> = withContext(Dispatchers.IO) {
+        runCatching {
+            val auth = authSession()
+            val result = workflowApi.configuration(auth.serverUrl, auth.accessToken, sessionId)
+            val current = authSession()
+            check(current.serverUrl == auth.serverUrl && current.accessToken == auth.accessToken) { "账号已变化。" }
+            result
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+    }
+
+    suspend fun updateAgentConfiguration(sessionId: String, revision: Long, values: Map<String, Any>): Result<JSONObject> = withContext(Dispatchers.IO) {
+        runCatching {
+            val auth = authSession()
+            val body = JSONObject().put("operationId", java.util.UUID.randomUUID().toString())
+                .put("expectedRevision", revision).put("values", JSONObject(values))
+            val result = workflowApi.updateConfiguration(auth.serverUrl, auth.accessToken, sessionId, body)
+            val current = authSession()
+            check(current.serverUrl == auth.serverUrl && current.accessToken == auth.accessToken) { "账号已变化。" }
+            result
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+    }
+
     private val optimisticStore = SessionOptimisticMessageStore()
     private val attachmentTransfer = SessionAttachmentTransfer(sessionsApi)
 

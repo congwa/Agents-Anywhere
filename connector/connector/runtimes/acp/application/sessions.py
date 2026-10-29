@@ -13,7 +13,7 @@ from ..domain.sessions import SessionBinding
 from .configuration import ConfigurationService
 from .interactions import InteractionService
 from .preparations import SessionPreparation
-from .prompts import PromptService
+from .prompts import PromptService, prompt_digest
 
 
 class SessionService:
@@ -52,6 +52,7 @@ class SessionService:
         self.prompts = PromptService(store)
         self.interactions = InteractionService(store, self._notice)
         self.stopping = False
+        self.on_binding_changed = None
         self.preparation_driver = preparation_driver or SessionPreparation()
 
     def start_background(self):
@@ -225,6 +226,8 @@ class SessionService:
     def _save_binding(self, binding: SessionBinding):
         self.store.put("binding", binding.session_id, asdict(binding))
         self._emit("session.state.updated", self.state(binding.session_id))
+        if self.on_binding_changed is not None:
+            self.on_binding_changed(binding.session_id)
 
     def state(self, session_id: str) -> dict:
         row = self.store.require("binding", session_id)
@@ -608,6 +611,7 @@ class SessionService:
         content: str,
         *,
         creation_id: str | None = None,
+        blocks=None,
     ) -> dict:
         if not message_id:
             raise AcpError("message_identity_required", "消息需要稳定身份。")
@@ -616,7 +620,7 @@ class SessionService:
             if previous:
                 require_same_input(
                     previous["input_digest"],
-                    fingerprint({"sessionId": session_id, "text": content}),
+                    prompt_digest(session_id, content, blocks),
                 )
                 return {
                     "ok": previous["message_accepted"] is True,
@@ -630,12 +634,12 @@ class SessionService:
                 raise AcpError("agent_recovery_required", "会话执行者需要恢复。")
             if len(self.active_runs) >= self.max_runs:
                 raise AcpError("run_capacity", "并发执行已达到上限。")
-            operation, _ = self.prompts.prepare(session_id, message_id, content)
+            operation, _ = self.prompts.prepare(session_id, message_id, content, blocks)
             self.active_runs.add(session_id)
             self._save_binding(
                 binding.observe(binding.connection_generation, foreground="running")
             )
-        self._job(self._run_prompt(context, operation, content, creation_id))
+        self._job(self._run_prompt(context, operation, content, creation_id, blocks))
         return {
             "ok": False,
             "code": "operation_pending",
@@ -644,7 +648,7 @@ class SessionService:
             "clientMessageId": message_id,
         }
 
-    async def _run_prompt(self, context, operation, content, creation_id):
+    async def _run_prompt(self, context, operation, content, creation_id, blocks=None):
         failed = False
         stop_reason = None
         try:
@@ -654,7 +658,10 @@ class SessionService:
                 return
             result = await asyncio.wait_for(
                 context["client"].prompt(
-                    context["agentSessionId"], content, operation.operation_id
+                    context["agentSessionId"],
+                    content,
+                    operation.operation_id,
+                    **({"blocks": blocks} if blocks else {}),
                 ),
                 self.max_run_seconds,
             )

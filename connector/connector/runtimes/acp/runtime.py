@@ -9,11 +9,14 @@ from connector.runtime_protocol.errors import (
 from connector.runtime_protocol.models import (
     RuntimeCapability,
     RuntimeCapabilitySet,
+    RuntimeCommand,
+    RuntimeCommandResult,
     RuntimeIdentity,
     RuntimeModelCatalog,
     RuntimeModelItem,
     RuntimeOperationResult,
     RuntimePermissionCatalog,
+    RuntimePermissionItem,
     RuntimeTimelineItem,
     RuntimeTimelineSnapshot,
     SessionMeta,
@@ -22,6 +25,7 @@ from connector.runtime_protocol.models import (
 )
 from connector.runtime_protocol.workflows import RuntimeWorkflowResult
 
+from .application.agent_capabilities import AgentCapabilities
 from .composition import build_services
 from .domain.definitions import AcpError
 
@@ -37,6 +41,9 @@ class AcpRuntime(AgentRuntime):
         self.app, self.sync = build_services(
             config, host, profile, launch, preparation_driver=preparation_driver
         )
+
+        self.agent_capabilities = AgentCapabilities(self.app)
+        self.app.on_binding_changed = self._publish_session_capabilities
 
     @property
     def identity(self):
@@ -163,7 +170,25 @@ class AcpRuntime(AgentRuntime):
             ),
         )
 
+    def _publish_session_capabilities(self, session_id):
+        value = self._session_capabilities(session_id)
+        self.app._emit("runtime.capability.updated", {
+            "runtime": "acp", "runtimeId": self.config.runtime_id,
+            "sessionId": session_id, "revision": value.revision,
+            "capabilities": [{
+                "capabilityId": item.capability_id, "scope": item.scope,
+                "runtime": "acp", "runtimeId": self.config.runtime_id,
+                "sessionId": session_id, "version": item.version,
+                "supported": item.supported, "available": item.available,
+                "allowed": item.allowed, "unavailableReason": item.unavailable_reason,
+                "metadata": dict(item.metadata),
+            } for item in value.capabilities],
+        })
+
     async def get_session_capabilities(self, session_id, external_session_id=None):
+        return self._session_capabilities(session_id)
+
+    def _session_capabilities(self, session_id):
         state = self.app.state(session_id)
         live = self.app.sessions.get(session_id)
         ready = bool(live and not live["closing"])
@@ -210,6 +235,35 @@ class AcpRuntime(AgentRuntime):
                 available=ready,
             ),
         ]
+        snapshot = self.app.configurations.snapshot(session_id)
+        categories = {item.get("category") for item in snapshot.options}
+        for category in ("model", "permission"):
+            supported = category in categories
+            capabilities.append(
+                RuntimeCapability(
+                    capability_id="catalog." + category,
+                    scope="session",
+                    runtime="acp",
+                    session_id=session_id,
+                    supported=supported,
+                    available=supported and ready,
+                )
+            )
+        for capability_id in ("session.commands", "runtime.attachment"):
+            supported = self.agent_capabilities.supported(session_id, capability_id)
+            capabilities.append(
+                RuntimeCapability(
+                    capability_id=capability_id,
+                    scope="session",
+                    runtime="acp",
+                    session_id=session_id,
+                    supported=supported,
+                    available=supported and ready and state["status"] == "idle",
+                    metadata={"maxFiles": 16, "maxBytes": 33554432}
+                    if capability_id == "runtime.attachment"
+                    else {},
+                )
+            )
         return RuntimeCapabilitySet(
             runtime="acp",
             session_id=session_id,
@@ -284,7 +338,14 @@ class AcpRuntime(AgentRuntime):
         return RuntimeModelCatalog(runtime="acp", revision=0, models=())
 
     async def list_permission_catalog(self, query=None, limit=100):
-        return RuntimePermissionCatalog(runtime="acp", revision=0, permissions=())
+        return RuntimePermissionCatalog(
+            runtime="acp",
+            revision=1,
+            permissions=tuple(
+                RuntimePermissionItem(id=value, title=title, selection_id=value)
+                for value, title in self.profile.permission_options
+            ),
+        )
 
     async def list_scoped_model_catalog(self, session_id, query=None, limit=100):
         snapshot = self.app.configurations.snapshot(session_id)
@@ -394,21 +455,121 @@ class AcpRuntime(AgentRuntime):
         client_message_id=None,
         cwd=None,
     ):
-        if attachments or any(
-            value is not None for value in (selections or {}).values()
-        ):
-            raise RuntimeInvalidRequestError(
-                "请通过配置工作流选择参数；附件能力尚未启用。"
-            )
         if (
             external_session_id
             != self.app.store.require("binding", session_id)["agent_session_id"]
         ):
             raise RuntimeInvalidRequestError("原生会话身份不匹配。")
-        result = await self.app.submit(session_id, client_message_id, content)
+        current = self.app.state(session_id)["selections"]
+        changes = {
+            key: value
+            for key, value in (selections or {}).items()
+            if value is not None and current.get(key) != value
+        }
+        if changes:
+            updated = await self.update_session_selections(
+                session_id, external_session_id, changes
+            )
+            if not updated.ok:
+                return updated
+        blocks = None
+        if attachments:
+            from .infrastructure.attachments import materialize
+
+            if not self.agent_capabilities.supported(session_id, "runtime.attachment"):
+                raise RuntimeInvalidRequestError("当前 Agent 不支持附件。")
+            blocks = await materialize(
+                self.host, session_id, attachments, self.app.root / "attachments"
+            )
+        result = await self.app.submit(
+            session_id, client_message_id, content, blocks=blocks
+        )
         return RuntimeOperationResult(
             ok=result["ok"], code=result.get("code"), result=result
         )
+
+    async def list_commands(
+        self, session_id, external_session_id=None, query=None, limit=50
+    ):
+        value = await self.agent_capabilities.invoke(
+            session_id,
+            "session.commands",
+            "aa/list_commands",
+            {},
+            external_session_id=external_session_id,
+        )
+        return tuple(
+            RuntimeCommand(
+                id=item["name"],
+                title=item["name"],
+                description=item.get("description"),
+                accepts_args=True,
+                args_schema={"type": "string"},
+                metadata={
+                    "ui": {
+                        "kind": "execute",
+                        "acceptsMultiline": True,
+                        "allowedStatuses": ["idle"],
+                    }
+                },
+            )
+            for item in value["commands"]
+            if not query
+            or query.casefold()
+            in (item["name"] + " " + item.get("description", "")).casefold()
+        )[:limit]
+
+    async def execute_command(
+        self, session_id, command, external_session_id=None, raw=None, args=()
+    ):
+        try:
+            value = await self.agent_capabilities.invoke(
+                session_id,
+                "session.commands",
+                "aa/execute_command",
+                {"command": command, "raw": raw, "args": list(args)},
+                writable=True,
+                external_session_id=external_session_id,
+            )
+            return RuntimeCommandResult(
+                command=command,
+                ok=value["ok"],
+                code=value.get("code"),
+                message=value.get("message"),
+                result=value.get("result", {}),
+            )
+        except AcpError as error:
+            return RuntimeCommandResult(
+                command=command, ok=False, code=error.code, message=str(error)
+            )
+
+    async def update_session_selections(
+        self, session_id, external_session_id, selections
+    ):
+        self.agent_capabilities.context(session_id, external_session_id)
+        snapshot = self.app.configurations.snapshot(session_id)
+        values = {}
+        for category, value in selections.items():
+            if value is None:
+                continue
+            option = next(
+                (item for item in snapshot.options if item.get("category") == category),
+                None,
+            )
+            if option is None:
+                raise RuntimeInvalidRequestError("当前 Agent 不支持此配置。")
+            values[option["id"]] = value
+        from uuid import uuid4
+
+        result = await self.update_session_configuration(
+            session_id,
+            {
+                "operationId": uuid4().hex,
+                "expectedRevision": snapshot.revision,
+                "values": values,
+            },
+        )
+        return RuntimeOperationResult(ok=result["phase"] == "completed", result=result)
 
     async def interrupt_session(self, session_id, reason=None):
         context = self.app.sessions.get(session_id)
@@ -449,6 +610,7 @@ class AcpRuntime(AgentRuntime):
                 self.app._emit(
                     "session.state.updated", self.app.state(row["session_id"])
                 )
+                self._publish_session_capabilities(row["session_id"])
         await self.sync.flush()
 
     async def sync_session_timeline(self, session_id, external_session_id=None):

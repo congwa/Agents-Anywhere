@@ -14,7 +14,22 @@ class ConfigurationService:
         )
 
     def observe(self, scope_id: str, options: list[dict]) -> dict:
-        snapshot = self.snapshot(scope_id).replace_options(options)
+        # ACP reserves its category enum. AA's provider-independent selection
+        # category travels in namespaced metadata and survives SDK validation.
+        normalized = []
+        for option in options:
+            category = option.get("_meta", {}).get("aa", {}).get("selectionCategory")
+            normalized.append(
+                {
+                    **option,
+                    **(
+                        {"category": category}
+                        if category in {"model", "permission", "effort"}
+                        else {}
+                    ),
+                }
+            )
+        snapshot = self.snapshot(scope_id).replace_options(normalized)
         self.store.put("configuration", scope_id, asdict(snapshot))
         return {"revision": snapshot.revision, "options": list(snapshot.options)}
 

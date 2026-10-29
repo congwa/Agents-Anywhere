@@ -39,10 +39,10 @@ nonisolated enum AgentForm {
         }
     }
 
-    static func configurationSchema(_ snapshot: JSONValue) -> JSONValue {
+    static func configurationSchema(_ snapshot: JSONValue, includeModel: Bool = false) -> JSONValue {
         guard case let .array(options) = snapshot["options"] else { return .object(["type": .string("object"), "properties": .object([:])]) }
         var fields: [String: JSONValue] = [:]
-        for option in options where option["category"] != .string("model") {
+        for option in options where includeModel || option["category"] != .string("model") {
             guard let id = option["configId"]?.stringValue ?? option["id"]?.stringValue else { continue }
             var field: [String: JSONValue] = ["type": .string(option["type"] == .string("boolean") ? "boolean" : "string"), "title": option["name"] ?? .string(id)]
             field["default"] = option["currentValue"]

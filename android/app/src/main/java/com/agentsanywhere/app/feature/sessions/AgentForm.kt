@@ -35,12 +35,12 @@ object AgentForm {
         }
     }
 
-    fun configurationSchema(snapshot: JSONObject): JSONObject {
+    fun configurationSchema(snapshot: JSONObject, includeModel: Boolean = false): JSONObject {
         val properties = JSONObject()
         val options = snapshot.optJSONArray("options")
         for (i in 0 until (options?.length() ?: 0)) {
             val option = options!!.getJSONObject(i)
-            if (option.optString("category") == "model") continue
+            if (!includeModel && option.optString("category") == "model") continue
             val field = JSONObject().put("title", option.getString("name")).put("type", if (option.getString("type") == "boolean") "boolean" else "string").put("default", option.get("currentValue"))
             if (option.getString("type") == "select") {
                 val values = org.json.JSONArray()

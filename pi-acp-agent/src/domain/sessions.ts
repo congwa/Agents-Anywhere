@@ -2,7 +2,7 @@ export type SessionRecord = {
   id: string; platformSessionId: string; generation: string; cwd: string;
   preparationId?: string;
   phase: 'preparing' | 'prepared' | 'opening' | 'ready' | 'closing' | 'closed' | 'recovery_required';
-  prepared?: Record<string, any>; selectionId?: string; permission: string;
+  prepared?: Record<string, any>; selectionId?: string; permission?: string;
   sourcePath?: string; position?: Record<string, unknown>;
 }
 

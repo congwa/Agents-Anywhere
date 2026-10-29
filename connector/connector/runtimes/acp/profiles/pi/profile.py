@@ -3,6 +3,11 @@ from ...domain.definitions import AgentProfile
 PI_PROFILE = AgentProfile(
     id="pi",
     title="Pi",
+    permission_options=(
+        ("ask", "写入与命令审批"),
+        ("ask_all", "全部工具审批"),
+        ("readonly", "只读"),
+    ),
     required_guarantees=frozenset(
         {
             "project_trust_before_resources",

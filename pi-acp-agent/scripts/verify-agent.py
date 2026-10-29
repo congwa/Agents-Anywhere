@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -11,16 +12,28 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
+from typing import ClassVar
 
 from acp import RequestError
-
+from connector.runtime_protocol.models import (
+    RuntimeAttachment,
+    RuntimeAttachmentContent,
+)
+from connector.runtimes.acp.application.agent_capabilities import AgentCapabilities
 from connector.runtimes.acp.application.sessions import SessionService
-from connector.runtimes.acp.domain.definitions import AgentProfile, LaunchDefinition
+from connector.runtimes.acp.domain.definitions import (
+    AcpError,
+    AgentProfile,
+    LaunchDefinition,
+)
 from connector.runtimes.acp.infrastructure.acp.client import AgentClient
 from connector.runtimes.acp.infrastructure.persistence import Store
 from connector.runtimes.acp.infrastructure.processes import AgentProcess
 from connector.runtimes.acp.infrastructure.projection import Projection
 from connector.runtimes.acp.profiles.pi.preparation import PiPreparation
+from connector.runtimes.acp.profiles.pi.profile import PI_PROFILE
+from connector.runtimes.acp.runtime import AcpRuntime
 
 
 async def until(predicate):
@@ -117,11 +130,80 @@ async def verify_connector(root, workspace, launch):
             i["content"].get("text") == "AA_OWN_ACP_OK" and i["status"] == "done"
             for i in store.values("projection")
         )
+        runtime = object.__new__(AcpRuntime)
+        runtime.app = app
+        runtime.profile = PI_PROFILE
+        runtime.config = SimpleNamespace(runtime_id="controlled-acp")
+        runtime.agent_capabilities = AgentCapabilities(app)
+        attachment_body = b"AA_ACP_NATIVE_FILE_PROOF_7291"
+
+        async def download(session_id, file_id):
+            return RuntimeAttachmentContent(
+                file_id=file_id,
+                name="proof.txt",
+                media_type="text/plain",
+                content=attachment_body,
+            )
+
+        runtime.host = SimpleNamespace(attachment_download=download)
+        capabilities = await runtime.get_session_capabilities("platform-app")
+        assert {
+            "session.commands",
+            "runtime.attachment",
+            "catalog.model",
+            "catalog.permission",
+        } <= {
+            capability.capability_id
+            for capability in capabilities.capabilities
+            if capability.supported and capability.available
+        }
+        commands = await runtime.list_commands("platform-app")
+        assert [command.id for command in commands] == ["compact"]
+        Model.read_attachment = True
+        result = await runtime.start_turn(
+            "platform-app",
+            app.sessions["platform-app"]["agentSessionId"],
+            "Read the attached file",
+            selections=app.state("platform-app")["selections"],
+            attachments=(
+                RuntimeAttachment(
+                    file_id="file_probe",
+                    name="proof.txt",
+                    media_type="text/plain",
+                    size=len(attachment_body),
+                ),
+            ),
+            client_message_id="connector-file",
+        )
+        assert result.result["phase"] == "dispatching"
+        await until(lambda: app.state("platform-app")["status"] == "idle")
+        assert any(
+            message.get("role") == "tool"
+            and "AA_ACP_NATIVE_FILE_PROOF_7291" in str(message.get("content"))
+            for message in Model.requests[-1]["messages"]
+        ), "native read never delivered attachment bytes"
+        before_bad = Model.calls
+        try:
+            await runtime.start_turn(
+                "platform-app",
+                app.sessions["platform-app"]["agentSessionId"],
+                "bad attachment",
+                attachments=(
+                    RuntimeAttachment(
+                        file_id="file_probe", media_type="text/plain", size=1
+                    ),
+                ),
+                client_message_id="bad-file",
+            )
+            raise AssertionError("mismatched attachment was dispatched")
+        except AcpError as error:
+            assert getattr(error, "code", None) == "attachment_mismatch", error
+        assert Model.calls == before_bad
         await app.close_session(
             "platform-app", store.require("binding", "platform-app")["owner_generation"]
         )
         print(
-            "Connector application → real ACP Agent: deferred creation, basic resources, early durable acceptance while approval pending, final native projection and close passed"
+            "Connector → capability port → ACP → SDK: preparation, permission category, commands, verified file delivery with native tool read, mismatch rejection, early receipt, stable final projection and close passed"
         )
     finally:
         await app.stop()
@@ -140,11 +222,14 @@ class ControlledProcess(AgentProcess):
 
 class Model(BaseHTTPRequestHandler):
     calls = 0
+    requests: ClassVar[list] = []
+    read_attachment = False
     proof: Path
 
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers["content-length"])))
         assert request["model"] == "controlled"
+        type(self).requests.append(request)
         type(self).calls += 1
         delta = {"content": "AA_OWN_ACP_OK"}
         reason = "stop"
@@ -165,6 +250,36 @@ class Model(BaseHTTPRequestHandler):
                 ]
             }
             reason = "tool_calls"
+        if type(self).read_attachment:
+            latest = next(
+                message
+                for message in reversed(request["messages"])
+                if message["role"] == "user"
+            )
+            text = (
+                latest["content"]
+                if isinstance(latest["content"], str)
+                else "".join(part.get("text", "") for part in latest["content"])
+            )
+            match = re.search(r' path=("[^"\n]+")\]', text)
+            assert match, text
+            delta = {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "read-native-attachment",
+                        "type": "function",
+                        "function": {
+                            "name": "read",
+                            "arguments": json.dumps(
+                                {"path": json.loads(match.group(1))}
+                            ),
+                        },
+                    }
+                ]
+            }
+            reason = "tool_calls"
+            type(self).read_attachment = False
         chunk = {
             "id": "controlled",
             "object": "chat.completion.chunk",
@@ -192,6 +307,17 @@ async def main():
         (workspace / ".pi/extensions/startup.ts").write_text(
             "export default function(pi) { pi.on('session_start', async (_,ctx) => { if (!await ctx.ui.confirm('ACP 初始化确认','继续？')) throw new Error('declined'); }); }\n"
         )
+        (agent / "settings.json").write_text(
+            json.dumps(
+                {
+                    "compaction": {
+                        "enabled": False,
+                        "keepRecentTokens": 16,
+                        "reserveTokens": 128,
+                    }
+                }
+            )
+        )
         Model.calls = 0
         Model.proof = workspace / "proof.txt"
         server = ThreadingHTTPServer(("127.0.0.1", 0), Model)
@@ -210,7 +336,7 @@ async def main():
                                     "id": "controlled",
                                     "name": "controlled",
                                     "reasoning": False,
-                                    "input": ["text"],
+                                    "input": ["text", "image"],
                                     "contextWindow": 4096,
                                     "maxTokens": 128,
                                 }
@@ -316,6 +442,86 @@ async def main():
                 assert "conflict" in str(error).lower() or "身份" in str(error), type(
                     error
                 )
+            commands = await client.extension(
+                "aa/list_commands", {"sessionId": session["sessionId"]}
+            )
+            assert [item["name"] for item in commands["commands"]] == ["compact"]
+            try:
+                await client.extension(
+                    "aa/execute_command",
+                    {
+                        "sessionId": session["sessionId"],
+                        "command": "compact",
+                        "raw": "/bash whoami",
+                    },
+                )
+                raise AssertionError("command name/raw mismatch accepted")
+            except RequestError:
+                pass
+            # Actual ACP image → OpenMA converter → SDK → captured model request.
+            image_data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+            await client.prompt(
+                session["sessionId"],
+                "inspect attached image",
+                "image-message",
+                blocks=[{"type": "image", "mimeType": "image/png", "data": image_data}],
+            )
+            assert any(
+                part.get("type") == "image_url"
+                and part["image_url"]["url"].endswith(image_data)
+                for message in Model.requests[-1]["messages"]
+                if isinstance(message.get("content"), list)
+                for part in message["content"]
+            )
+            calls_with_image = Model.calls
+            await client.prompt(
+                session["sessionId"],
+                "inspect attached image",
+                "image-message",
+                blocks=[{"type": "image", "mimeType": "image/png", "data": image_data}],
+            )
+            assert Model.calls == calls_with_image
+            try:
+                await client.prompt(
+                    session["sessionId"],
+                    "inspect attached image",
+                    "image-message",
+                    blocks=[
+                        {"type": "image", "mimeType": "image/png", "data": "different"}
+                    ],
+                )
+                raise AssertionError("attachment conflict accepted")
+            except RequestError:
+                pass
+            before_invalid_image = Model.calls
+            try:
+                await client.prompt(
+                    session["sessionId"],
+                    "invalid image",
+                    "invalid-image",
+                    blocks=[
+                        {
+                            "type": "image",
+                            "mimeType": "image/png",
+                            "data": "invalid-image-content",
+                        }
+                    ],
+                )
+                raise AssertionError("SDK image omission was accepted")
+            except RequestError as error:
+                assert "图片" in str(error), error
+            assert Model.calls == before_invalid_image, (
+                "incomplete image reached model endpoint"
+            )
+            compacted = await client.extension(
+                "aa/execute_command",
+                {"sessionId": session["sessionId"], "command": "compact", "args": []},
+            )
+            assert compacted["ok"] is True, compacted
+            assert Model.calls > calls_with_image, (
+                "compact did not invoke the SDK/model"
+            )
+            before = Model.calls
             await client.close_session(session["sessionId"])
             receipt = await client.extension(
                 "aa/get_operation",
@@ -348,7 +554,7 @@ async def main():
             )
             assert any(kind == "form" for kind, _ in interactions)
             print(
-                "AA-owned ACP: trust before resources, no native session during prepare, startup form, actual approved write, streamed completion, durable receipt after Agent restart, clean native resume, duplicate submission and conflict rejection passed"
+                "ACP composition: trust before resources, initialization, approved write, actual image payload, malformed-image rejection before HTTP, attachment idempotency, native compact, durable receipts, clean resume and conflict rejection passed"
             )
             hosted_launch = LaunchDefinition(
                 launch.executable,

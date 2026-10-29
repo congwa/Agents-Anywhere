@@ -30,6 +30,12 @@ export class ModelGuard {
   }
   private payload(payload: any, permit: ModelPermit, profile: RequestProfile): void {
     if (!payload || payload.model !== permit.model) this.deny('pi_request_payload_changed', '最终请求中的模型与已确认选择不一致。')
+    if (permit.requiredImages) {
+      const messages = payload.messages ?? payload.input
+      const latestUser = Array.isArray(messages) ? messages.filter((message: any) => message.role === 'user').at(-1) : undefined
+      const images = Array.isArray(latestUser?.content) ? latestUser.content.filter((part: any) => part.type === 'image_url' || part.type === 'input_image').length : 0
+      if (images < permit.requiredImages) this.deny('pi_request_images_omitted', '图片未完整进入最终模型请求，本次请求已阻止。')
+    }
     const wireEffort = profile === 'openai' ? payload.reasoning_effort : payload.reasoning?.effort
     const effort = wireEffort === 'none' || wireEffort === undefined ? 'off' : wireEffort
     const expected = permit.wireEffort === null || permit.wireEffort === 'none' ? 'off' : permit.wireEffort ?? permit.thinkingLevel

@@ -32,6 +32,7 @@ export class PiEngine {
   private lease?: ChildProcess
   private closing = false
   private initialized = false
+  private admitting = false
   private scope: 'preparation' | 'creation' | 'session'
   private scopeId: string
   private trusted = false
@@ -274,23 +275,40 @@ export class PiEngine {
     }
     return this.interactions.respond(response)
   }
-  async prompt(request: { content: string; clientMessageId: string; attachments?: any[] }, steer = false): Promise<any> {
+  private async authorizeRequest(operationId: string): Promise<void> {
+    const selection = this.catalog!.selections[this.selectedId!]
+    const model = this.services!.modelRuntime.getModel(selection.provider, selection.model)!
+    const auth = await this.services!.modelRuntime.getAuth(model)
+    requireValue(auth, 'pi_restore_model_unavailable', '模型认证不可用。')
+    this.guard.permit = { operationId, provider: selection.provider, model: selection.model,
+      api: model.api, baseUrl: auth.auth.baseUrl ?? model.baseUrl, thinkingLevel: selection.thinkingLevel, wireEffort: model.thinkingLevelMap?.[selection.thinkingLevel as keyof typeof model.thinkingLevelMap],
+      requestProfile: requestProfile(model),
+      generation: this.config.generation, cancelled: false, dispatched: 0 }
+  }
+  private async compact(instructions?: string): Promise<any> {
+    requireValue(this.session && this.initialized && !this.closing && !this.run, 'session_busy', '请等待会话空闲后压缩。')
+    await this.authorizeRequest(randomUUID())
+    this.guard.lastFailure = undefined; this.lastRunFailure = undefined
+    this.publishState('running')
+    const timer = setTimeout(() => this.abortRun(new RuntimeFailure('run_timeout', '压缩已达到时间上限。')), this.config.maxRunMs)
+    timer.unref()
+    const work = this.session.compact(instructions)
+    this.run = work.then(() => undefined, error => { this.lastRunFailure = failure(error) })
+      .finally(() => { clearTimeout(timer); this.run = undefined; this.guard.permit = undefined; this.publishSettledState() })
+    try { return await work } finally { await this.run; await this.checkpoint(false) }
+  }
+  async prompt(request: { content: string; clientMessageId: string; attachments?: any[]; images?: any[] }, steer = false): Promise<any> {
     requireValue(this.session && this.services && this.catalog && this.initialized && !this.closing, 'session_unavailable', '会话尚未就绪。')
     requireValue(!this.run, 'session_busy', '会话正在运行，请先中断或等待结束。')
     requireValue(!request.attachments?.length, "attachments_unsupported", "此 Runtime 尚未启用附件交付。")
-    requireValue(request.content.trim() || request.attachments?.length, 'empty_message', '消息不能为空。')
+    requireValue(request.content.trim() || request.images?.length, 'empty_message', '消息不能为空。')
+    requireValue(!request.images?.length || this.session.model?.input.includes('image'), 'model_images_unsupported', '所选模型不支持图片。')
     const submission = new PromptSubmission(this.config.sessionId, request)
     const { fingerprint, key } = submission
     const prior = await this.store.read<any>(key)
     if (prior) { submission.requireSame(prior); return prior.receipt ?? { ok: false, code: 'outcome_unknown' } }
-    const selection = this.catalog.selections[this.selectedId!]
-    const model = this.services.modelRuntime.getModel(selection.provider, selection.model)!
-    const auth = await this.services.modelRuntime.getAuth(model)
-    requireValue(auth, 'pi_restore_model_unavailable', '模型认证不可用。')
-    this.guard.permit = { operationId: request.clientMessageId, provider: selection.provider, model: selection.model,
-      api: model.api, baseUrl: auth.auth.baseUrl ?? model.baseUrl, thinkingLevel: selection.thinkingLevel, wireEffort: model.thinkingLevelMap?.[selection.thinkingLevel as keyof typeof model.thinkingLevelMap],
-      requestProfile: requestProfile(model),
-      generation: this.config.generation, cancelled: false, dispatched: 0 }
+    await this.authorizeRequest(request.clientMessageId)
+    this.guard.permit!.requiredImages = request.images?.length ?? 0
     this.guard.lastFailure = undefined; this.lastRunFailure = undefined
     this.clientMessageId = request.clientMessageId
     await this.store.write(key, { fingerprint, phase: 'prepared' })
@@ -306,7 +324,7 @@ export class PiEngine {
     this.publishState('running')
     const timer = setTimeout(() => this.abortRun(new RuntimeFailure('run_timeout', '运行已达到时间上限。')), this.config.maxRunMs)
     timer.unref()
-    this.run = this.session.prompt(request.content, { preflightResult: disposition => {
+    this.run = this.session.prompt(request.content, { images: request.images, preflightResult: disposition => {
       intake = true
       this.scope = 'session'; this.scopeId = this.config.sessionId!
       void persistReceipt({ ok: true, created: true, messageAccepted: true, disposition,
@@ -361,11 +379,20 @@ export class PiEngine {
   async settled(): Promise<void> { await this.run }
   history(): unknown[] { return this.manager?.getBranch() ?? [] }
   async dispatch(method: string, params: any): Promise<any> {
+    if (['prompt', 'select', 'compact'].includes(method)) {
+      requireValue(!this.admitting, 'session_busy', '另一操作正在准入，请等待其完成。')
+      this.admitting = true
+      try { return await this.dispatchOperation(method, params) } finally { this.admitting = false }
+    }
+    return this.dispatchOperation(method, params)
+  }
+  private async dispatchOperation(method: string, params: any): Promise<any> {
     if (method === 'getSubmission') return await this.getSubmission(params.clientMessageId) ?? { phase: 'not_found' }
     if (method === 'settled') { await this.settled(); return { settled: true, failure: this.lastRunFailure ?? this.guard.lastFailure ?? null } }
     if (method === 'history') return { entries: this.history() }
     if (method === 'respond') return this.respond(params)
     if (method === 'getReceipt') return this.interactions.getReceipt(params.responseOperationId) ?? { disposition: 'outcome_unknown' }
+    if (method === 'compact') return this.compact(params.instructions)
     if (method === 'prompt') return this.prompt(params)
     if (method === 'interrupt') { this.guard.cancel(); this.interactions.cancelAll(); await this.session?.abort(); await this.run; return { ok: true } }
     if (method === 'cancelInitialization') {

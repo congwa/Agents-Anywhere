@@ -8,8 +8,9 @@ export const aaAcpSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'urn:agents-anywhere:acp-runtime:1.1',
   $defs: {
-    capabilities: object(['protocolVersion', 'guarantees'], { protocolVersion: { const: AA_ACP_PROTOCOL },
-      guarantees: { type: 'array', uniqueItems: true, items: { enum: EXECUTION_GUARANTEES } } }),
+    capabilities: object(['protocolVersion', 'guarantees', 'capabilities'], { protocolVersion: { const: AA_ACP_PROTOCOL },
+      guarantees: { type: 'array', uniqueItems: true, items: { enum: EXECUTION_GUARANTEES } },
+      capabilities: { type: 'array', uniqueItems: true, items: { type: 'string', minLength: 1 } } }),
     prepareRequest: object(['cwd'], { preparationId: id, cwd: { type: 'string', minLength: 1, maxLength: 4096 } }),
     prepareResult: object(['sessionId', 'deferred', 'ticket', 'configOptions', 'resourceFingerprint', 'trustMode'], {
       sessionId: id, deferred: { const: true }, ticket: id, configOptions: { type: 'array' },
@@ -19,6 +20,8 @@ export const aaAcpSchema = {
       preparationId: id, platformSessionId: id, ownerGeneration: id, selectionId: id,
     }),
     promptMetadata: object(['clientMessageId'], { clientMessageId: id }),
+    commandRequest: object(['sessionId', 'command'], { sessionId: id, command: id,
+      raw: { type: ['string', 'null'] }, args: { type: 'array', items: { type: 'string' } } }),
     operationUpdate: object(['agentSessionId', 'sessionId', 'clientMessageId', 'ownerGeneration', 'messageAccepted'], {
       agentSessionId: id, sessionId: id, externalSessionId: id, clientMessageId: id, ownerGeneration: id,
       messageAccepted: { type: 'boolean' }, ok: { type: 'boolean' }, created: { type: 'boolean' },

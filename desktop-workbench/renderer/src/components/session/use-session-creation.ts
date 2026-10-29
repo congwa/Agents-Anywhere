@@ -107,6 +107,9 @@ export function useSessionCreation(options: Options) {
       if (version !== generation.current || userId !== latest.current.userId) return
       const attachments = await inlineAttachmentsFromFiles(entry.draft.attachments)
       if (version !== generation.current || userId !== latest.current.userId) return
+      if (entry.draft.preparedWorkspace && attachments.length) {
+        throw new Error("工作区准备流程暂不支持首条消息附件，附件和草稿已保留。请先创建会话后发送附件。")
+      }
       requestSent = true
       let created
       if (entry.draft.preparedWorkspace) {

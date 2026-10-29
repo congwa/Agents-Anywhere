@@ -31,6 +31,7 @@ class AgentProfile:
     required_guarantees: frozenset[str] = frozenset()
     release_ready: bool = False
     unavailable_reason: str = "acp_release_acceptance_pending"
+    permission_options: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)

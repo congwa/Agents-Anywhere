@@ -1,12 +1,11 @@
-import { randomUUID } from 'node:crypto'
-import { digest, RuntimeFailure } from '@agents-anywhere/pi-execution'
-import type { WorkerConfig, WorkerEvent } from '@agents-anywhere/pi-execution'
-import { EXECUTION_GUARANTEES, type SessionRecord } from '../domain/sessions.js'
+import { randomUUID, createHash } from 'node:crypto'
+import { AgentFailure as RuntimeFailure } from '../domain/failures.js'
+import { type SessionRecord } from '../domain/sessions.js'
 import { AA_ACP_PROTOCOL } from './protocol.js'
-import type { AcpTransport, AgentSettings, CoordinationStore, ExecutionFactory, ExecutionPort, NativeVocabulary, NativeHistoryPort } from './ports.js'
+import type { AcpTransport, ApplicationSettings, CoordinationStore, AgentCapabilityPort, ExecutionPort, AgentEvent } from './ports.js'
 
 /** ACP-specific orchestration owns no SDK objects and no model transcript. */
-export class AaPiAgent {
+export class AcpAgentApplication {
   private records = new Map<string, SessionRecord>()
   private workers = new Map<string, ExecutionPort>()
   private pending = new Set<Promise<unknown>>()
@@ -15,9 +14,8 @@ export class AaPiAgent {
   private closing = false
   private failedDelivery?: unknown
   private formSupported = false
-  constructor(private settings: AgentSettings, private store: CoordinationStore,
-    private factory: ExecutionFactory, private transport: AcpTransport, private vocabulary: NativeVocabulary,
-    private receipts: Pick<CoordinationStore, 'read'> = store, private history?: NativeHistoryPort) {}
+  constructor(private settings: ApplicationSettings, private store: CoordinationStore,
+    private capabilities: AgentCapabilityPort, private transport: AcpTransport) {}
 
   async initialize(params: any): Promise<any> {
     if (params.protocolVersion !== 1) throw new RuntimeFailure('unsupported_acp_version', '仅支持 ACP v1。')
@@ -25,9 +23,9 @@ export class AaPiAgent {
     for (const row of await this.store.values<SessionRecord>()) {
       if (row.id && row.phase) { row.phase = 'recovery_required'; this.records.set(row.id, row); await this.save(row) }
     }
-    return { protocolVersion: 1, agentInfo: { name: 'aa-pi-acp', version: '1' }, authMethods: [],
-      agentCapabilities: { sessionCapabilities: { close: {}, resume: {} }, loadSession: true,
-        _meta: { aa: { protocolVersion: AA_ACP_PROTOCOL, guarantees: [...EXECUTION_GUARANTEES] } } } }
+    return { protocolVersion: 1, agentInfo: { name: this.capabilities.descriptor.name, version: '1' }, authMethods: [],
+      agentCapabilities: { promptCapabilities: this.capabilities.descriptor.promptCapabilities, sessionCapabilities: { close: {}, resume: {} }, loadSession: true,
+        _meta: { aa: { protocolVersion: AA_ACP_PROTOCOL, guarantees: [...this.capabilities.descriptor.guarantees], capabilities: [...this.capabilities.descriptor.capabilities] } } } }
   }
   private save(row: SessionRecord): Promise<void> { return this.store.write('session:' + row.id, row) }
   private record(id: string): SessionRecord {
@@ -39,20 +37,12 @@ export class AaPiAgent {
     this.pending.add(work)
     void work.catch(error => { this.failedDelivery = error }).finally(() => this.pending.delete(work))
   }
-  private config(row: SessionRecord, role: 'preparation' | 'session'): WorkerConfig {
-    return { role, workerId: randomUUID(), generation: row.generation, runtimeId: this.settings.runtimeId,
-      scopeId: row.id, cwd: row.cwd, agentDir: this.settings.agentDir, storageRoot: this.settings.stateDir,
-      python: this.settings.python, maxRunMs: this.settings.maxRunMs, sessionId: row.platformSessionId,
-      nativeSessionId: row.id, trustMode: row.prepared?.trustMode, selectionId: row.selectionId,
-      permission: row.permission, expectedResourceFingerprint: row.prepared?.resourceFingerprint,
-      sourcePath: row.sourcePath, position: row.position }
-  }
   private worker(row: SessionRecord, role: 'preparation' | 'session'): ExecutionPort {
-    const worker = this.factory.create(this.config(row, role), event => this.event(row, event))
+    const worker = this.capabilities.create({ role, session: row }, event => this.event(row, event))
     this.workers.set(row.id, worker)
     return worker
   }
-  private event(row: SessionRecord, event: WorkerEvent): void {
+  private event(row: SessionRecord, event: AgentEvent): void {
     if (event.kind === 'interaction' && event.data.status === 'open' && !this.handled.has(event.data.interactionId)) {
       this.handled.add(event.data.interactionId); this.track(this.answer(row, event.data))
     } else if (event.kind === 'timeline') {
@@ -98,23 +88,16 @@ export class AaPiAgent {
     if (!item.id) return
     const meta = { aa: { timelineItem: { ...item, sessionId: row.platformSessionId, source: { ...item.source, runtime: 'acp' } } } }
     if (item.type === 'tool') {
-      await this.transport.update(row.id, { sessionUpdate: 'tool_call', toolCallId: item.id, kind: 'other',
-        title: item.content.title ?? 'Pi tool', status: item.status === 'failed' ? 'failed' : item.status === 'done' ? 'completed' : 'in_progress',
+      await this.transport.update(row.id, { sessionUpdate: 'tool_call', toolCallId: item.id, ...this.capabilities.tool(item, row.cwd), status: item.status === 'failed' ? 'failed' : item.status === 'done' ? 'completed' : 'in_progress',
         rawOutput: item.content, _meta: meta })
     } else {
       const previous = this.displayed.get(item.id) ?? '', current = item.content.text ?? ''
       this.displayed.set(item.id, current)
-      await this.transport.update(row.id, { sessionUpdate: item.role === 'user' ? 'user_message_chunk' : 'agent_message_chunk',
+      await this.transport.update(row.id, { sessionUpdate: item.role === 'user' ? 'user_message_chunk' : item.content.isThinking ? 'agent_thought_chunk' : 'agent_message_chunk',
         content: { type: 'text', text: current.startsWith(previous) ? current.slice(previous.length) : current }, _meta: meta })
     }
   }
-  private options(row: SessionRecord): any[] {
-    const selections = row.prepared?.selections ?? {}
-    return [{ id: 'model', name: '模型与推理强度', category: 'model', type: 'select', currentValue: row.selectionId ?? Object.keys(selections)[0],
-      options: Object.entries(selections).map(([id, value]: any) => ({ value: id, name: `${value.provider}/${value.model} · ${value.thinkingLevel}` })) },
-    { id: 'permission', name: '工具权限', category: 'permission', type: 'select', currentValue: row.permission,
-      options: [{ value: 'ask', name: '写入与命令审批' }, { value: 'ask_all', name: '全部工具审批' }, { value: 'readonly', name: '只读' }] }]
-  }
+  private options(row: SessionRecord): any[] { return this.capabilities.configuration(row) }
   async prepare(params: any): Promise<any> {
     if (this.closing) throw new RuntimeFailure('agent_closing', '执行端正在关闭。')
     const preparationId = params.preparationId ?? randomUUID()
@@ -125,7 +108,7 @@ export class AaPiAgent {
       return this.preparation(previous)
     }
     const id = randomUUID()
-    const row: SessionRecord = { id, preparationId, platformSessionId: id, generation: randomUUID(), cwd: params.cwd, phase: 'preparing', permission: 'ask' }
+    const row: SessionRecord = { id, preparationId, platformSessionId: id, generation: randomUUID(), cwd: params.cwd, phase: 'preparing' }
     this.records.set(id, row); await this.save(row)
     const worker = this.worker(row, 'preparation')
     try {
@@ -145,23 +128,23 @@ export class AaPiAgent {
     if (prepared.cwd !== params.cwd || prepared.phase !== 'prepared') throw new RuntimeFailure('preparation_stale', '准备不能用于本次创建。')
     prepared.platformSessionId = params._meta?.aa?.platformSessionId ?? prepared.id
     prepared.generation = params._meta?.aa?.ownerGeneration ?? prepared.generation
-    prepared.selectionId = params._meta?.aa?.selectionId ?? Object.keys(prepared.prepared?.selections ?? {})[0]
+    this.capabilities.initializeSession(prepared, params._meta?.aa ?? {})
     prepared.phase = 'opening'; await this.save(prepared)
     const worker = this.worker(prepared, 'session')
     try {
       const result = await worker.boot(); prepared.sourcePath = result.sourcePath; prepared.position = result.position
       prepared.phase = 'ready'; await this.save(prepared)
-      return { sessionId: prepared.id, configOptions: this.options(prepared), _meta: { aa: { guarantees: [...EXECUTION_GUARANTEES], ownerGeneration: prepared.generation } } }
+      return { sessionId: prepared.id, configOptions: this.options(prepared), _meta: { aa: { guarantees: [...this.capabilities.descriptor.guarantees], capabilities: [...this.capabilities.descriptor.capabilities], ownerGeneration: prepared.generation } } }
     } catch (error) { prepared.phase = 'recovery_required'; await this.save(prepared); await worker.close(); this.workers.delete(prepared.id); throw error }
   }
   async setSessionConfigOption(params: any): Promise<any> {
     const row = this.record(params.sessionId), worker = this.workers.get(row.id)
     if (!worker || row.phase !== 'ready') throw new RuntimeFailure('session_unavailable', '会话需要恢复。')
-    const option = this.options(row).find(x => x.id === params.configId)
-    if (!option?.options.some((x: any) => x.value === params.value)) throw new RuntimeFailure('invalid_configuration', '配置值已失效。')
-    const selectionId = params.configId === 'model' ? params.value : row.selectionId
-    const permission = params.configId === 'permission' ? params.value : row.permission
-    await worker.request('select', { selectionId, permission }); row.selectionId = selectionId; row.permission = permission
+    const option = this.options(row).find(x => (x.configId ?? x.id) === params.configId)
+    const choices = (option?.options ?? []).flatMap((group: any) => group.options ?? [group])
+    const valid = option?.type === 'boolean' ? typeof params.value === 'boolean' : option?.type === 'select' && choices.some((choice: any) => choice.value === params.value)
+    if (!valid) throw new RuntimeFailure('invalid_configuration', '配置值已失效。')
+    await this.capabilities.configure(row, worker, params.configId, params.value)
     await this.save(row); return { configOptions: this.options(row) }
   }
   async prompt(params: any): Promise<any> {
@@ -169,9 +152,8 @@ export class AaPiAgent {
     if (!worker || row.phase !== 'ready') throw new RuntimeFailure('session_unavailable', '会话需要恢复。')
     if (!params._meta?.aa?.clientMessageId) throw new RuntimeFailure('message_identity_required', '消息需要稳定业务身份。')
     if (this.failedDelivery) throw new RuntimeFailure('sync_failed', '事件同步失败，需要恢复校准。')
-    const converted = this.vocabulary.prompt(params.prompt)
-    if (converted.images.length) throw new RuntimeFailure('attachments_unsupported', '附件尚未通过执行侧验证。')
-    const receipt = await worker.request('prompt', { content: converted.text, clientMessageId: params._meta.aa.clientMessageId }, this.settings.maxRunMs)
+    const converted = this.capabilities.prompt(params.prompt)
+    const receipt = await worker.request('prompt', { content: converted.text, ...(converted.images.length ? { images: converted.images } : {}), clientMessageId: params._meta.aa.clientMessageId }, this.settings.maxRunMs)
     if (receipt.messageAccepted !== true) throw new RuntimeFailure(receipt.code ?? 'prompt_rejected', '消息尚未接纳。')
     const settled = await worker.request('settled', {}, this.settings.maxRunMs)
     await Promise.all([...this.pending])
@@ -209,39 +191,37 @@ export class AaPiAgent {
     if (method === 'aa/get_operation') {
       const row = this.record(params.agentSessionId ?? params.sessionId)
       const worker = this.workers.get(row.id)
-      if (!worker) return await this.receipts.read('admission:' + row.platformSessionId + ':' + params.clientMessageId) ?? { phase: 'not_found' }
+      if (!worker) return await this.capabilities.receipt(row, params.clientMessageId) ?? { phase: 'not_found' }
       return worker.request('getSubmission', { clientMessageId: params.clientMessageId })
     }
     if (method === 'aa/get_position') return { position: this.record(params.sessionId).position }
     if (method === 'aa/select_position') {
       const row = this.record(params.sessionId)
-      if (this.workers.has(row.id) || !row.sourcePath || !this.history || params.ownerGeneration !== row.generation) throw new RuntimeFailure('owner_changed', '选择位置前必须释放原执行者并核验代际。')
-      const snapshot = await this.history.read(row.sourcePath)
-      if (!snapshot.complete || snapshot.header.id !== row.id || params.sourceEpoch !== digest(snapshot.header)
-          || params.fileEntriesDigest !== digest(snapshot.entries) || params.positionRevision !== row.position?.positionRevision) throw new RuntimeFailure('position_stale', '原生来源或位置已变化。')
-      const entries = new Map(snapshot.entries.map(entry => [entry.id, entry])), branch: any[] = [], seen = new Set<string>()
-      let cursor = params.leafId
-      while (cursor !== null) {
-        if (typeof cursor !== 'string' || seen.has(cursor) || !entries.has(cursor)) throw new RuntimeFailure('position_invalid', '原生分支不完整。')
-        seen.add(cursor); const entry = entries.get(cursor); branch.unshift(entry); cursor = entry.parentId
-      }
-      row.position = { piSessionId: row.id, sourceEpoch: digest(snapshot.header), fileEntriesDigest: digest(snapshot.entries),
-        leafId: params.leafId, anchorDigest: digest(branch), positionRevision: params.positionRevision + 1,
-        branchGeneration: randomUUID(), ownerGeneration: row.generation, clean: true }
+      if (this.workers.has(row.id) || params.ownerGeneration !== row.generation) throw new RuntimeFailure('owner_changed', '选择位置前必须释放原执行者并核验代际。')
+      row.position = await this.capabilities.selectPosition(row, params)
       row.phase = 'recovery_required'; await this.save(row)
       return { position: row.position }
+    }
+    if (method === 'aa/list_commands' || method === 'aa/execute_command') {
+      const row = this.record(params.sessionId), worker = this.workers.get(row.id)
+      if (!worker || row.phase !== 'ready') throw new RuntimeFailure('session_unavailable', '会话需要恢复。')
+      if (method === 'aa/list_commands') return { commands: this.capabilities.commands() }
+      return this.capabilities.executeCommand(worker, params)
     }
     if (method === 'aa/replay') {
       const row = this.record(params.sessionId), worker = this.workers.get(row.id)
       if (!worker) throw new RuntimeFailure('session_unavailable', '会话需要恢复。')
       const history = await worker.request('history')
-      return { sourceId: digest([row.id, row.sourcePath]), complete: true, updates: this.vocabulary.replay(history.entries, row.cwd) }
+      return { sourceId: createHash('sha256').update(JSON.stringify([row.id, row.sourcePath])).digest('hex'), complete: true, updates: this.capabilities.replay(history.entries, row.cwd) }
     }
     throw new RuntimeFailure('unsupported_operation', '不支持该 ACP 扩展方法。')
   }
-  async authenticate(): Promise<any> { throw new RuntimeFailure('external_auth_required', '请通过本机 Pi 认证配置完成登录。') }
+  async authenticate(): Promise<any> { throw new RuntimeFailure('external_auth_required', '请通过工作设备上的 Agent 认证配置完成登录。') }
   async dispose(): Promise<void> {
     this.closing = true
     await Promise.allSettled([...this.records.values()].filter(x => this.workers.has(x.id)).map(x => this.closeSession({ sessionId: x.id })))
   }
 }
+
+// Compatibility for existing component consumers.
+export { AcpAgentApplication as AaPiAgent }
