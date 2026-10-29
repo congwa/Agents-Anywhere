@@ -41,6 +41,8 @@ import {
 } from "@/components/session/optimistic-timeline"
 import { sortSessionViews } from "@/components/session/session-list-order"
 import { hasDesktopConnectorBridge } from "@/features/desktop/bridge"
+import { RuntimeWorkflowPanel } from "@/components/session/runtime-workflow-panel"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useSessionCreation } from "@/components/session/use-session-creation"
 import { isApiError } from "@/lib/api/errors"
 
@@ -1449,6 +1451,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     replaceRoute({ page: "home", projectId })
   }, [replaceRoute])
   const sessionCreation = useSessionCreation({
+    storageScope: `${authSession?.serverUrl ?? ""}:${authSession?.userId ?? ""}`,
     userId: authSession?.userId ?? null,
     token: authSession?.accessToken ?? null,
     addMessage: addOptimisticMessage,
@@ -1629,7 +1632,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     refreshData: fetchData,
   }
 
-  return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
+  return <WorkspaceContext.Provider value={value}>{children}
+    {Object.values(sessionCreation.workflowCreations).map(operation => <Dialog key={operation.id} open={true}><DialogContent><DialogHeader><DialogTitle>会话创建进度</DialogTitle></DialogHeader><RuntimeWorkflowPanel operation={operation} pending={sessionCreation.workflowPending} error={sessionCreation.workflowError} onRespond={(request, action, input) => sessionCreation.respondWorkflow(operation, request, action, input)} onCancel={() => sessionCreation.cancelWorkflow(operation)} onRefresh={() => sessionCreation.refreshWorkflow(operation)} onDismiss={() => sessionCreation.dismissWorkflow(operation.id)} /></DialogContent></Dialog>)}
+  </WorkspaceContext.Provider>
 }
 
 function sameStableValue(left: unknown, right: unknown): boolean {

@@ -1,0 +1,25 @@
+{
+  "name": "@agents-anywhere/pi-runtime",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "contract:generate": "node lib/scripts/export-contracts.js",
+    "verify": "node scripts/verify-runtime.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "meshcall": "0.3.0",
+    "zod": "^4.1.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@agents-anywhere/pi-execution": "file:../pi-execution"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,5 +1,9 @@
 "use client"
 
+import { RuntimeWorkflowPanel } from "@/components/session/runtime-workflow-panel"
+import { useWorkspacePreparation } from "@/components/session/use-workspace-preparation"
+import { AgentConfigurationFields } from "@/components/session/structured-agent-fields"
+
 import * as React from "react"
 import { Monitor, ChevronDown, ArrowUp, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
@@ -250,6 +254,12 @@ export function TaskComposer() {
   const [runtimeCapabilities, setRuntimeCapabilities] = React.useState<ProtocolCapabilitySet | null>(null)
   const [catalogsLoading, setCatalogsLoading] = React.useState(false)
   const [catalogRefreshKey, setCatalogRefreshKey] = React.useState(0)
+  const needsPreparation = Boolean(findCapability(runtimeCapabilities, "runtime.workspace.prepare", selectedRuntimeScope)?.supported)
+  const preparation = useWorkspacePreparation(authSession?.accessToken, `${selectedConnectorId}:${selectedAgent}:${workspace?.path ?? ""}`)
+  const [preparedConfiguration, setPreparedConfiguration] = React.useState<Record<string, string | boolean>>({})
+  React.useEffect(() => {
+    if (needsPreparation) setModelCatalog(preparation.operation?.state.phase === "ready" ? preparation.operation.state.catalog ?? null : null)
+  }, [needsPreparation, preparation.operation])
   const [creating, setCreating] = React.useState(false)
   const [recoveryTargetChanged, setRecoveryTargetChanged] = React.useState(false)
   const preserveRecoveredSelections = Boolean(creationEditorDraft && !recoveryTargetChanged)
@@ -723,6 +733,7 @@ export function TaskComposer() {
     workspace?.connectorId === selectedConnectorId &&
     !creating &&
     !catalogsLoading &&
+    (!needsPreparation || preparation.operation?.state.phase === "ready") &&
     (!requiresModelSelection || Boolean(selectedModelSelection)) &&
     (!requiresPermissionSelection || Boolean(selectedPermissionSelection)) &&
     (attachments.length === 0 || canUseAttachments) && attachmentsAllowed &&
@@ -738,7 +749,7 @@ export function TaskComposer() {
     if (!authSession?.accessToken || !selectedConnector || !selectedRuntime || !workspace?.path || creatingRef.current) return
     if (recoveryTargetUnavailable || workspace.connectorId !== selectedConnector.id) return
     if (!prompt.trim() && attachments.length === 0) return
-    if (catalogsLoading) return
+    if (catalogsLoading || (needsPreparation && preparation.operation?.state.phase !== "ready")) return
     if (requiresModelSelection && !selectedModelSelection) return
     if (requiresPermissionSelection && !selectedPermissionSelection) return
     if (attachments.length > 0 && (!canUseAttachments || !attachmentsAllowed)) return
@@ -861,6 +872,8 @@ export function TaskComposer() {
         workspace: { ...workspace, projectId: project.id },
         modelId: selectedModel, reasoningId: selectedReasoning, permissionMode: selectedPermissionMode,
         request: { ...createBody, content: messageText, selections, clientMessageId },
+        ...(needsPreparation && preparation.operation ? { preparedWorkspace: { preparationId: preparation.operation.id,
+          expectedRevision: preparation.operation.state.revision, catalogRevision: preparation.operation.state.catalogRevision!, ...(preparation.operation.state.configuration ? { configuration: preparedConfiguration } : {}) } } : {}),
       }, optimisticMessage, (id) => toolSidebarStore.migrateSession(localSessionId, id))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("createFailed"))
@@ -958,6 +971,15 @@ export function TaskComposer() {
           <span className="ml-1 inline-block h-[0.9em] w-0.5 translate-y-[0.1em] rounded-full bg-muted-foreground motion-safe:animate-[composer-caret_1s_steps(1,end)_infinite]" aria-hidden="true" />
         </h1>
 
+        {needsPreparation ? <div className="mb-4 flex flex-col gap-3">
+          <Button variant="outline" disabled={preparation.pending || !workspace?.path || creating} onClick={async () => {
+            if (!selectedConnector || !workspace?.path) return
+            try { const project = await resolveProject({ connectorId: selectedConnector.id, workspacePath: workspace.path }); await preparation.prepare({ connectorId: selectedConnector.id, runtimeId: selectedAgent, projectId: project.id }) }
+            catch (error) { toast.error(String(error)) }
+          }}>准备工作区并加载模型</Button>
+          {preparation.operation ? <RuntimeWorkflowPanel operation={preparation.operation} pending={preparation.pending} error={preparation.error} onRespond={preparation.respond} onCancel={preparation.cancel} /> : preparation.error ? <p role="alert">{preparation.error}</p> : null}
+          {preparation.operation?.state.phase === "ready" && preparation.operation.state.configuration ? <AgentConfigurationFields key={preparation.operation.id} configuration={preparation.operation.state.configuration} onChange={setPreparedConfiguration} disabled={creating} /> : null}
+        </div> : null}
         <div
           ref={composerRef}
           className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"

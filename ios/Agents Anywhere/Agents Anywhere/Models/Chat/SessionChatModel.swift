@@ -321,7 +321,13 @@ final class SessionChatModel {
     func respond(notice: SessionNoticeModel, action: V2RuntimeNoticeAction) async {
         guard !isWorking, notice.canRespond(fresh: session.runtime.isFresh),
               notice.notice.actions.contains(action), notice.hasValidInput(for: action) else { return }
-        let input = notice.payload(for: action)
+        var input = notice.payload(for: action)
+        if let owner = notice.notice.metadata["ownerGeneration"]?.stringValue,
+           let revision = notice.notice.metadata["requestRevision"]?.intValue {
+            var envelope: [String: JSONValue] = ["ownerGeneration": .string(owner), "requestRevision": .number(Double(revision)), "responseOperationId": .string(UUID().uuidString)]
+            if let input { envelope["response"] = input }
+            input = .object(envelope)
+        }
         notice.begin(actionID: action.id)
         isWorking = true
         defer { isWorking = false }
@@ -330,6 +336,19 @@ final class SessionChatModel {
             notice.accepted()
             if notice.submission == .accepted { responseRevision += 1 }
         } catch { notice.fail(error) }
+    }
+
+    func respondRuntimeDialog(notice: SessionNoticeModel, actionID: String, value: JSONValue?) async {
+        guard !isWorking, notice.canRespond(fresh: session.runtime.isFresh),
+              notice.notice.actions.contains(where: { $0.id == actionID }),
+              let owner = notice.notice.metadata["ownerGeneration"]?.stringValue,
+              let revision = notice.notice.metadata["requestRevision"]?.intValue else { return }
+        var body: [String: JSONValue] = ["ownerGeneration": .string(owner), "requestRevision": .number(Double(revision)), "responseOperationId": .string(UUID().uuidString)]
+        if let value { body["response"] = value }
+        notice.begin(actionID: actionID); isWorking = true
+        defer { isWorking = false }
+        do { try await repository.respond(sessionId: session.id, noticeId: notice.id, actionId: actionID, input: .object(body)); notice.accepted() }
+        catch { notice.fail(error) }
     }
 
     @discardableResult func perform(_ operation: () async throws -> Void) async -> Bool {

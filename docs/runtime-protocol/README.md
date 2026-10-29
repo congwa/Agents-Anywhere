@@ -1,5 +1,7 @@
 # Agent Runtime Protocol v1
 
+通用 ACP 与 Pi 增强：[实施约定](acp-runtime-integration-plan.md)、[实现与验证记录](acp-runtime-implementation.md)、[上游扩展要求](acp-pi-upstream-hooks.md)。ACP Pi 尚未开放创建，既有 Pi SDK 路径保持独立。
+
 Status: draft for Connector runtime protocol. The current Server/Web session
 boundary is defined in [Session API Proposal](../api/session-api-proposal.md)
 and [Session Service Architecture](../api/session-service-architecture.md).
@@ -158,6 +160,8 @@ support per-turn SDK options can apply current state at dispatch time.
 
 ## Documents
 
+- [pi Runtime 接入设计：架构、领域模块与数据流（设计方案，未实现）](./pi-runtime-integration-plan.md)
+- [pi Runtime 客户端补充：Web、Android、iOS 与 Electron（设计方案，未实现）](./pi-runtime-clients-plan.md)
 - [Runtime instances v2 rewrite](./runtime-instances-v2-rewrite.md)
 - [Connector -> Runtime ABC](./connector-to-runtime.md)
 - [Runtime -> Connector host client](./runtime-host-client.md)
@@ -168,3 +172,5 @@ support per-turn SDK options can apply current state at dispatch time.
 - [Implementation order](./implementation-order.md)
 - [Behavior migration targets](./behavior-migration-targets.md)
 - [API documentation](../api/README.md)
+
+- [pi Runtime 实现记录](pi-runtime-implementation.md)

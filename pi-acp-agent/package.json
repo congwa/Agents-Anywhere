@@ -1,0 +1,24 @@
+{
+  "name": "@agents-anywhere/pi-acp-agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agents-anywhere/pi-execution": "file:../pi-execution",
+    "@agentclientprotocol/sdk": "1.9.0",
+    "@openma/pi-acp": "0.1.8",
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-agent-core": "1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3"
+  }
+}

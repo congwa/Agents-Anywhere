@@ -49,6 +49,7 @@ import { timelineRunCounts } from "@/components/session/timeline-summary"
 import { needsOlderTimelinePage } from "@/components/session/timeline-autofill"
 import { createTimelineScrollFollow } from "@/components/session/timeline-scroll-follow"
 import { createSessionEventBuffer } from "@/components/session/session-event-buffer"
+import { RuntimePositionDialog } from "@/components/session/runtime-position-dialog"
 import { CAPABILITY, capabilityIsUsable, findCapability } from "@/components/session/capabilities"
 import { SessionComposer, type AttachedFile } from "@/components/session/session-composer"
 import { commandResult, commandTransportFailure, type CommandOutcome } from "@/components/session/runtime-command-model"
@@ -1643,6 +1644,7 @@ export function SessionDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden overscroll-none">
+      {findCapability(effectiveCapabilities, "session.execution_position.read", sessionRuntimeScope)?.available ? <RuntimePositionDialog token={token} sessionId={sessionId} ownerGeneration={runtimeState?.metadata?.ownerGeneration} canClose={Boolean(findCapability(effectiveCapabilities, "session.close", sessionRuntimeScope)?.available)} canSelect={Boolean(findCapability(effectiveCapabilities, "session.execution_position.select", sessionRuntimeScope)?.available)} /> : null}
       {error ? (
         <Alert variant="destructive" className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-3xl">
           <CircleAlert />

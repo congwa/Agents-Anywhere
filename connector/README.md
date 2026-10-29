@@ -13,7 +13,7 @@ back to the backend.
 ```text
 connector/
   runtime_protocol/  AgentRuntime, RuntimeProvider, RuntimeHostClient contracts
-  runtimes/          Codex, Claude and DSH RuntimeProvider/AgentRuntime packages
+  runtimes/          Codex, Claude, DSH and pi RuntimeProvider/AgentRuntime packages
   server/            Backend auth, ingest, RPC channel, request dispatch, host mapping
   core/              Connector config, runtime owner, runtime config storage
   local/             Local filesystem, shell, and terminal backends
@@ -211,3 +211,7 @@ uv run pytest -q
 ```
 
 DSH 插件默认将私有数据存放在 `~/.agents-anywhere/dsh-bridge-next/`，其托管 Connector 通过 `AGENT_CONNECTOR_DATA_DIR` 使用其中的 `connector/` 子目录。插件首次启动负责迁移旧 `.agentsanywhere/dsh-bridge-next/` 数据；通用 Connector 的默认路径和自定义环境变量行为不变。
+
+## pi Runtime
+
+pi 使用独立 Node Host 和每会话 SDK worker，不依赖 DSH。先在仓库根目录构建 `pi-runtime/artifact`，再在设备中创建并启动 pi 实例；详见 [pi Runtime](../pi-runtime/README.md)。缺少产物或不支持的进程监督平台只影响 pi 实例。首次使用项目资源前需要确认信任，模型目录在工作区准备后加载。
