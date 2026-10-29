@@ -1,25 +1,7 @@
-# 会话接口 2.2 提案：消息队列、计划、目标（参考 ACP）
+# 会话接口 2.2 提案：消息队列、计划、目标
 
 > 状态：提案（2026-10-12）。本文档描述设计，不代表已实现；实现前需与 `contracts/` 和源码核对。
 > 讨论范围：发送消息队列（含"打断并发送"，取代原生 steer）、goal 的表达与呈现、plan 模式与计划审阅的表达与呈现。
-
-## 0. 为什么参考 ACP，借什么
-
-[Agent Client Protocol](https://agentclientprotocol.com/)（Zed 发起，Codex / Claude Code / Gemini CLI 等都有适配）解决的正是"一个客户端如何通用地驾驭多种 Agent"。它和我们的差异是：ACP 是编辑器与本机 Agent 子进程之间的点对点 JSON-RPC；我们中间多了 Server，而且有四种客户端要同时渲染同一份状态。所以**协议不能照搬，但数据形状和状态机可以借**。值得借的几条：
-
-| ACP 的做法 | 我们对应的落点 |
-| --- | --- |
-| 实体按 id 做 upsert（`messageId`、`toolCallId`、`planId`），整体替换而不是打补丁（plan 每次发完整列表） | 队列、计划都用"整份快照 + 实时事件整体替换"，四端实现最简单，也最不容易错 |
-| 前台状态机 `running / requires_action / idle` 与 stop reason 分开 | 我们已有 `SessionStatus`；队列的派发只看 `idle | error` 这一个条件 |
-| v2 的 prompt 语义："接受 = 已插入会话，不等于已处理"，立即返回 `messageId` | 发消息接口在运行中不再 409，而是接受并返回 `delivery: queued` |
-| 会话级配置用 `configOptions`（`category: mode / model / thought_level`） | 我们已有 selections + catalog（model / permission / effort），**把 plan 模式做成 `mode` catalog**，不要再发明一套 |
-| 计划 `plan_update { plan: { id, type: "items", entries: [{content, priority, status}] } }` | 新的 `SessionPlan` 实体，形状直接对齐 |
-| 权限请求的选项带 `kind: allow_once / allow_always / reject_once / reject_always`，退出 plan 模式是一次 `kind: "switch_mode"` 的工具调用走同一套审批 | 计划审阅做成 Notice 的新 `interactionType: "plan_review"`，动作语义沿用这四种 kind |
-| 开放枚举：自定义值以 `_` 开头，未知值客户端必须容忍 | 我们所有新枚举（`interactionType`、`delivery`、plan `status`）都按此约定写进契约 |
-| `_meta` 作为扩展位 | 我们已有 `metadata`，保持 |
-| 官方适配器的 goal extension（`_session/goal` + `session_info_update._meta…goal`，见 3.3） | `SessionGoal` 与它字段一致，能力按 `actions` 声明 |
-
-不借的：ACP 的 `session/prompt` 阻塞到回合结束（v1）、文件系统 / 终端由客户端提供、`session/cancel` 是通知。我们的 Server 是长期存在的中间层，这些语义不适用。
 
 ## 1. 发送消息队列
 
@@ -131,9 +113,9 @@ Codex 桌面 / IDE 有自己的 queued follow-ups（IPC 里的 `thread-queued-fo
 
 "plan" 实际上是三件事，必须拆开：
 
-1. **模式**：会话处于"只规划不改代码"的状态（Claude 的 plan permission mode、Codex 的 collaboration mode、ACP 的 `mode` config option）。
-2. **计划内容**：Agent 当前的执行计划本身（ACP `plan_update`；Claude 的 TodoWrite 列表和 ExitPlanMode 的 markdown；Codex 的 plan item；DSH 的 plan review 正文）。
-3. **计划审阅**：Agent 把计划交给人确认，人可以批准、要求修改或拒绝（Claude ExitPlanMode、DSH plan review、ACP 的 `switch_mode` 工具调用走权限请求）。
+1. **模式**：会话处于"只规划不改代码"的状态（Claude 的 plan permission mode、Codex 的 collaboration mode）。
+2. **计划内容**：Agent 当前的执行计划本身（Claude 的 TodoWrite 列表和 ExitPlanMode 的 markdown；Codex 的 plan item；DSH 的 plan review 正文）。
+3. **计划审阅**：Agent 把计划交给人确认，人可以批准、要求修改或拒绝（Claude ExitPlanMode、DSH plan review）。
 
 ### 2.1 模式：做成 `mode` catalog
 
@@ -148,7 +130,7 @@ Codex 桌面 / IDE 有自己的 queued follow-ups（IPC 里的 `thread-queued-fo
   ] }
 ```
 
-- Claude：`plan` 对应 `permission_mode: plan`，退出 plan 模式时 Runtime 上报 `selections.mode` 变化（相当于 ACP 的 `current_mode_update`）。现在 Claude 把 `plan` 混在 permission catalog 里，应迁出。
+- Claude：`plan` 对应 `permission_mode: plan`，退出 plan 模式时 Runtime 上报 `selections.mode` 变化。现在 Claude 把 `plan` 混在 permission catalog 里，应迁出。
 - Codex：对应 collaboration mode（IPC 的 `latestCollaborationMode`），目前只做读取展示；写入等 app-server 接口确认。
 - DSH：没有模式概念，不声明 `catalog.mode`。
 
@@ -176,8 +158,8 @@ Codex 桌面 / IDE 有自己的 queued follow-ups（IPC 里的 `thread-queued-fo
 }
 ```
 
-- `priority`：`high | medium | low`；entry `status`：`pending | in_progress | completed`（与 ACP 一致，便于以后直接对接 ACP agent）。
-- 更新语义：**整体替换**（ACP 规则），Runtime 每次上报完整列表；Server 只做版本号和广播。
+- `priority`：`high | medium | low`；entry `status`：`pending | in_progress | completed`。
+- 更新语义：**整体替换**，Runtime 每次上报完整列表；Server 只做版本号和广播。
 - 实时事件 `runtime.plan.updated { sessionId, plan: SessionPlan | null }`（`null` 表示计划撤销）；快照加 `plan`。
 - Connector 协议新增 `session.plan.upsert`（Runtime → Server），能力 `session.plan`。
 - timeline 不复制计划正文，只在计划被提出 / 批准 / 完成时写一条 `type: "marker", content.kind: "plan"` 的条目，引用 `planId`，让历史里看得出"这里出过一份计划"。
@@ -210,7 +192,7 @@ Runtime 映射：
 }
 ```
 
-- `actions[].kind` 是新增的可选字段，取值就是 ACP 的四个 permission option kind；没有它的老客户端照旧按 `style` 渲染。
+- `actions[].kind` 是新增的可选字段，取值为 `allow_once / allow_always / reject_once / reject_always`；没有它的老客户端照旧按 `style` 渲染。
 - 回复走现有 `POST /sessions/{id}/runtime/notices/{noticeId}/respond`。
 - Runtime 映射：Claude 的 `ExitPlanMode` 审批 → `approve` = 批准并切回默认模式，`approve_auto` = 批准并切到 auto；DSH 现有 `intent.kind = "plan-review"` 直接翻译成这个类型；Codex 暂无对应。
 - 老客户端的降级：`interactionType` 是开放枚举，不认识 `plan_review` 的客户端按 `input_request` 渲染，功能不丢。
@@ -241,42 +223,13 @@ goal 不是 AA 的功能，是 Runtime 的功能：Runtime 有原生 goal 就接
 | 接口 | app-server `thread/goal/set\|get\|clear`，通知 `thread/goal/updated\|cleared`；IPC `conversationState.threadGoal` 可读 | 内置命令 `/goal`；Agent SDK 没有 goal API，`/goal` 作为 prompt 中的内置命令发出（待验证 `slash_commands` 是否列出） | 远程 API `goals.create / edit / pause / resume / complete / clear / get`；会话事件 `goal/change`，远程事件 `goal/activation-changed` |
 | 停止规则 | 空闲才续跑；无工具调用跳过下次；中断即 paused | 连续多回合无工具调用停止；错误重试 3 次后暂停；限额暂停 | 轮数到顶即 blocked / complete |
 
-### 3.3 ACP 是怎么做的：没有一等公民，但有事实标准
-
-ACP 核心协议（v1 / v2 schema、全部 RFD）里**没有 goal**。但 ACP 官方维护的两个适配器 `codex-acp` 和 `claude-agent-acp` 各自实现了同一份 "goal extension"（JetBrains AIR 扩展的一部分，文档原话："shaped like a possible future first-class ACP API"），形状完全一致、与 provider 无关。这就是我们要抽象的那套接口，直接采用：
+### 3.3 统一目标接口
 
 ```jsonc
-// 1. 能力声明（ACP 放在 initialize._meta；我们放在 session.goal 能力的 metadata）
-{ "version": 1, "controlMethod": "_session/goal", "actions": ["set", "pause", "resume", "clear"] }
-// actions 是 Runtime 实际支持的子集：Codex 四个都有，Claude 只有 set / clear。客户端不得假设未声明的动作。
-
-// 2. 控制请求（ACP 方法 _session/goal）
-{ "sessionId": "…", "action": "set", "objective": "Ship the change" }   // set 必须带非空 objective
-{ "sessionId": "…", "action": "pause" | "resume" | "clear" }
-
-// 3. 状态快照（ACP 放在 session_info_update._meta.jetbrains.air.goal；清除时发 goal: null）
-{
-  "objective": "Ship the change",
-  "status": "active",            // active | paused | blocked | limited | complete
-  "iterations": 3,               // 可选：已评估 / 已续跑的轮数（Claude）
-  "lastReason": "Tests still need work",   // 可选：评估器或系统给出的最近一次理由（Claude）
-  "createdAt": 1710000000000, "updatedAt": 1710000012000,   // Unix 毫秒
-  "tokenBudget": null, "tokensUsed": 42, "timeUsedSeconds": 12,   // 可选：预算与用量（Codex）
-  "controlMethod": "_session/goal"
-}
-```
-
-生命周期规则（两份文档一字不差）：goal 属于会话，不属于某一次 prompt；`status: active` 只表示"目标还能驱动更多工作"，不表示现在有回合在跑；一次 prompt 在后端到达安静边界时就算完成，哪怕 goal 仍然 active；之后的自主续跑在这次 prompt 之外继续发状态更新；回合运行中客户端用 steer 或排队，空闲时发普通 prompt。所以客户端要把"正在工作"和"目标仍在进行"分开显示。
-
-provider 映射也是现成的：Codex 的 `usageLimited / budgetLimited` 归一成 `limited`，时间戳秒转毫秒，快照不变就不发；Claude 的 Stop hook `active_goal` 消息把 `condition / iterations / set_at / last_reason` 映射成 `objective / iterations / createdAt / lastReason`，`/goal clear` 发 `null`，取消回合不清除 goal。
-
-### 3.4 我们的接口：照搬这份扩展，加上 DSH
-
-```jsonc
-// SessionGoal —— 字段与 ACP goal extension 相同，只多一个 source
+// SessionGoal —— Runtime 目标的统一快照
 {
   "objective": "把 Server 测试全部切到 PostgreSQL 并让 CI 通过",
-  "status": "active",            // active | paused | blocked | limited | complete   （开放枚举，与 ACP 相同）
+  "status": "active",            // active | paused | blocked | limited | complete   （开放枚举）
   "iterations": 3,
   "lastReason": "测试还有 3 个失败",
   "createdAt": 1710000000000, "updatedAt": 1710000012000,
@@ -286,15 +239,15 @@ provider 映射也是现成的：Codex 的 `usageLimited / budgetLimited` 归一
 }
 ```
 
-| AA 接口 | Connector RPC | ACP 对应 | Codex | Claude | DSH |
-| --- | --- | --- | --- | --- | --- |
-| 能力 `session.goal`，`metadata = {version, actions}`；AA 的 `actions` 只会出现 `pause / resume / clear`（以及 `_` 前缀的扩展动作，如 DSH 的 `_complete`），**不含 `set`** | 能力声明 | `initialize._meta.goal` | `pause, resume, clear` | `clear` | `pause, resume, clear, _complete` |
-| `POST /sessions/{id}/runtime/goal {action}` | `session.goal.control {action}` | `_session/goal`（去掉 `set`） | `thread/goal/set {status}`、`thread/goal/clear` | 发 prompt `/goal clear` | `goals.pause\|resume\|complete\|clear` |
-| 快照 `goal` / 事件 `runtime.goal.updated { goal \| null }` | `session.goal.upsert`（Runtime → Server） | `session_info_update._meta…goal` | `thread/goal/updated\|cleared`；IPC 跟随时投影 `threadGoal` | 转录里的 `active_goal` 消息 + 发命令时先发最小快照 | 会话事件 `goal/change` |
+| AA 接口 | Connector RPC | Codex | Claude | DSH |
+| --- | --- | --- | --- | --- |
+| 能力 `session.goal`，`metadata = {version, actions}`；AA 的 `actions` 只会出现 `pause / resume / clear`（以及 `_` 前缀的扩展动作，如 DSH 的 `_complete`），**不含 `set`** | 能力声明 | `pause, resume, clear` | `clear` | `pause, resume, clear, _complete` |
+| `POST /sessions/{id}/runtime/goal {action}` | `session.goal.control {action}` | `thread/goal/set {status}`、`thread/goal/clear` | 发 prompt `/goal clear` | `goals.pause\|resume\|complete\|clear` |
+| 快照 `goal` / 事件 `runtime.goal.updated { goal \| null }` | `session.goal.upsert`（Runtime → Server） | `thread/goal/updated\|cleared`；IPC 跟随时投影 `threadGoal` | 转录里的 `active_goal` 消息 + 发命令时先发最小快照 | 会话事件 `goal/change` |
 
 状态归一：DSH `phase` 四个值直接对应，`activation: disarmed` → `paused`，`roundsStarted` → `iterations`，`blockedReason.message` → `lastReason`；Claude 的 achieved → `complete`，failed → `blocked` + `lastReason`。
 
-**一个接口，一个控制方法，一个快照**。四端只认 `actions` 决定显示哪些按钮；以后 ACP 把它收进核心协议，我们只改 Connector 的映射。`set` 在 ACP 扩展里存在，我们有意不暴露：契约里把它标为保留动作，Connector 不实现，客户端不显示。
+**一个接口，一个控制方法，一个快照**。四端根据 `actions` 决定显示哪些按钮。`set` 标为保留动作，Connector 不实现，客户端不显示；目标由 Runtime 原生入口建立。
 
 **goal 是 Runtime 配置里的可选功能。** 和 Codex 的 `ipcEnabled` 一样，每个支持 goal 的 Runtime 配置 schema 加一个布尔项 `goalEnabled`（默认开，i18n key `dashboard.device.runtimeConfigFields.goalEnabled.*`）。关掉后 Connector 不声明 `session.goal`、不拉取也不订阅 goal 状态、不转发任何控制；AA 里完全看不到 goal 相关 UI，Runtime 自己的 goal 行为不受影响（这是显示层开关，不是 Runtime 开关）。这样想完全不碰 goal 的用户、以及 Runtime 版本探测不稳定的环境都有退路。
 
@@ -302,20 +255,20 @@ provider 映射也是现成的：Codex 的 `usageLimited / budgetLimited` 归一
 
 **Runtime 自己的行为我们不干预**：续跑、评估、完成判定、预算 / 轮数全在 Runtime；goal 运行中用户发的消息按 1.2 的队列 / 打断规则走。
 
-### 3.5 呈现与交互（四端一致）
+### 3.4 呈现与交互（四端一致）
 
-- **进度行**：`goal != null` 时，在输入框上方显示一行：状态点 + 状态文字（进行中 / 已暂停 / 已阻塞 / 已受限 / 已完成）、目标文本（单行截断，点开看全文）、已运行时长（`timeUsedSeconds` 或从 `createdAt` 起算）；快照里有什么显示什么：`iterations` 显示"第 3 轮"、`tokensUsed / tokenBudget` 显示 `120k / 2M`、`lastReason` 作为副标题。按钮按能力里的 `actions` 显示：暂停 / 恢复（二选一）、清除；Claude 只有清除。没有"编辑"：想改目标就直接跟模型说。"正在工作"用会话状态的转圈表示，和目标状态分开，这是 ACP 文档特别强调的一点。手机端默认折叠成一个 pill，展开后内容相同。
+- **进度行**：`goal != null` 时，在输入框上方显示一行：状态点 + 状态文字（进行中 / 已暂停 / 已阻塞 / 已受限 / 已完成）、目标文本（单行截断，点开看全文）、已运行时长（`timeUsedSeconds` 或从 `createdAt` 起算）；快照里有什么显示什么：`iterations` 显示"第 3 轮"、`tokensUsed / tokenBudget` 显示 `120k / 2M`、`lastReason` 作为副标题。按钮按能力里的 `actions` 显示：暂停 / 恢复（二选一）、清除；Claude 只有清除。没有"编辑"：想改目标就直接跟模型说。"正在工作"用会话状态的转圈表示，和目标状态分开。手机端默认折叠成一个 pill，展开后内容相同。
 - **恢复确认**：Codex 的 `resumeConfirmation` 放在 `metadata` 里；为 true 时发消息前先内联问"目标已暂停，是否恢复？"，选"恢复并发送"或"只发送"。
 - **完成 / 阻塞 / 受限**：状态变为 `complete`、`blocked`、`limited` 时推一条会话通知（和审批通知同一通道，手机能收到）；进度行同步变色。完成后进度行保留显示直到用户清除。
 - **没有设置入口**：命令菜单里没有 `/goal`，进度行没有"新建"或"编辑"。没有 goal 时没有进度行，不占位。
 - **历史**：设置、暂停、恢复、完成、清除各写一条 `marker` 条目 `content.kind: "goal"`，和 plan 的 marker 同款。
 
-### 3.6 不变量：只要有 goal，AA 就必须能看到并能操作
+### 3.5 不变量：只要有 goal，AA 就必须能看到并能操作
 
 goal 可以从很多地方冒出来：Codex 的模型自己发起 goal；用户在 Codex App / CLI / VS Code、DSH Desktop 里设置；Claude 用户在终端敲 `/goal`；DSH 的 goal round 把状态改成 blocked；用户在 AA 里敲了 `/goal …` 并被 Runtime 当成指令执行了。不管来源是谁，都不允许出现"goal 已经存在，但 AA 这边既看不见也动不了"。为此定四条规则：
 
 1. **显示跟着数据走，按钮跟着能力走。** 只要快照（`goal != null`）到了，进度行就显示，不看 `session.goal` 能力有没有声明、`actions` 是不是空；能力只决定哪些按钮可点。能力探测失败（比如 Codex 版本判断错了）最多少几个按钮，不会少显示。
-2. **状态来源是 Runtime 的真相，不是我们自己的调用记录。** 每种 Runtime 都要有"加载时拉一次 + 之后订阅变化"两条路：Codex 加载时 `thread/goal/get`，之后 `thread/goal/updated | cleared`，IPC 跟随时投影 `conversationState.threadGoal`；DSH 加载时 `goals.get`，之后会话事件 `goal/change`；Claude 订阅 `active_goal` 消息（某些版本不发第一条，所以用户消息里出现 `/goal <condition>` 时 Connector 先发一份最小快照，`claude-agent-acp` 也是这么做的）。Connector 重启、Server 重连、客户端重新打开会话时，快照都走同一条"拉一次"的路恢复。
+2. **状态来源是 Runtime 的真相，不是我们自己的调用记录。** 每种 Runtime 都要有"加载时拉一次 + 之后订阅变化"两条路：Codex 加载时 `thread/goal/get`，之后 `thread/goal/updated | cleared`，IPC 跟随时投影 `conversationState.threadGoal`；DSH 加载时 `goals.get`，之后会话事件 `goal/change`；Claude 订阅 `active_goal` 消息（某些版本不发第一条，所以用户消息里出现 `/goal <condition>` 时 Connector 先发一份最小快照）。Connector 重启、Server 重连、客户端重新打开会话时，快照都走同一条"拉一次"的路恢复。
 3. **AA 不拦截、不改写用户的文本。** 用户在 AA 里敲 `/goal …` 就是一条普通消息：Claude 的 SDK 会把它当内置命令执行，Codex 的模型会看到这段文字并自行决定要不要调 goal 工具，DSH 同理。无论 Runtime 怎么处理，只要结果是出现了一个 goal，规则 2 保证它会被拉到 AA 里显示。AA 自己不提供任何建立 goal 的指令或按钮。
 4. **没有控制权时给出路，不给死路。** 按钮不可用的每一种情况都要有对应的替代动作或说明：IPC 跟随桌面线程 → "在 Codex App 中操作"走 deeplink；Claude 没有 pause / resume → 只显示编辑和清除，并提示"Claude 的目标会在出错或限额时自动暂停，发一条消息即可继续"；Runtime 暂时不可达 → 按钮灰掉并显示原因，状态照常显示。
 
@@ -325,7 +278,7 @@ goal 可以从很多地方冒出来：Codex 的模型自己发起 goal；用户�
 
 | 变更 | 文件 |
 | --- | --- |
-| `SessionQueueItem`、`SessionPlan`、`SessionGoal` schema（`SessionGoal` 与 ACP goal extension v1 字段一致） | `contracts/protocol/1.0/schemas/`（新建三份），`session-snapshot-response.schema.json` 加 `queue` / `plan` / `goal` |
+| `SessionQueueItem`、`SessionPlan`、`SessionGoal` schema | `contracts/protocol/1.0/schemas/`（新建三份），`session-snapshot-response.schema.json` 加 `queue` / `plan` / `goal` |
 | Connector 协议：`session.goal.control {action, objective?}` RPC、`session.goal.upsert` 通知（Runtime → Server）；能力 metadata `{version, actions}` | `connector/connector/runtime_protocol/*`、`docs/api/realtime.md` |
 | Notice：`interactionType` 加 `plan_review`，`actions[].kind` | `contracts/protocol/1.0/schemas/notice.schema.json`、`contracts/dsh-bridge/1.0/schemas/notice.schema.json` |
 | 能力：新增 `session.queue`、`session.plan`、`session.goal`、`catalog.mode`；**删除 `session.steer`**；同时把 `docs/api/capabilities.md` 里早就和代码不一致的 id 列表改成真实值 | `server/agent_server/core/capabilities.py`、`connector/runtime_protocol/models.py`、各端常量 |
@@ -348,7 +301,7 @@ goal 可以从很多地方冒出来：Codex 的模型自己发起 goal；用户�
 
 - `approve_auto` 在 Claude 上是切到 `auto` 权限模式还是 `acceptEdits`，要和 Claude 的实际 mode 列表对一次。
 - Codex 原生 goal 需要 Codex ≥ 0.128 且 `features.goals = true`；Connector 要在能力声明里按实际 app-server 版本决定 `session.goal` 是否可用，探测方式（`thread/goal/get` 报 method not found？）要实测。
-- Claude：SDK 会话里 `/goal`（含 `/goal clear`）是否出现在 `slash_commands`，运行中状态能从消息流里拿到多少（3.4）。
+- Claude：SDK 会话里 `/goal`（含 `/goal clear`）是否出现在 `slash_commands`，运行中状态能从消息流里拿到多少（3.3）。
 - DSH：模型能否自行建立 goal；若只能由用户在 DSH UI 建立，AA 里的 DSH 会话只有在那边设置过时才会出现进度行。
-- DSH：goal 服务的 cordis 键名与事件接入点（3.4）。
+- DSH：goal 服务的 cordis 键名与事件接入点（3.3）。
 - 计划 markdown 在手机端的渲染库（Android 现无 markdown 组件？需确认）。

@@ -1,6 +1,6 @@
 # Agent Runtime Protocol v1
 
-通用 ACP 与 Pi 增强：[实施约定](acp-runtime-integration-plan.md)、[实现与验证记录](acp-runtime-implementation.md)、[上游扩展要求](acp-pi-upstream-hooks.md)。ACP Pi 尚未开放创建，既有 Pi SDK 路径保持独立。
+Pi SDK 集成：[实施计划](pi-runtime-integration-plan.md)、[实现与验证记录](pi-runtime-implementation.md)、[客户端接入计划](pi-runtime-clients-plan.md)。
 
 Status: draft for Connector runtime protocol. The current Server/Web session
 boundary is defined in [Session API Proposal](../api/session-api-proposal.md)
@@ -41,7 +41,6 @@ Runtime adapters
   - Codex
   - Claude
   - OpenCode
-  - ACP
         |
 Native runtime process, SDK, IPC, local history, and filesystem state
 ```

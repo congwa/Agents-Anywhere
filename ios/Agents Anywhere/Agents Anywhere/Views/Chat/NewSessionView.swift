@@ -114,9 +114,6 @@ struct NewSessionView: View, Equatable {
                 Label(String(localized: "正在创建会话…"), appSymbol: "arrow.up.circle")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
-            if let schema = model.agentConfigurationSchema {
-                StructuredAgentFields(schema: schema, values: $model.agentConfigurationValues, disabled: model.isCreating || model.isPreparing)
-            }
             if let error = model.error {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(error).font(.subheadline).foregroundStyle(.secondary)

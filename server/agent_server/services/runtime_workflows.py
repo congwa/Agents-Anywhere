@@ -189,10 +189,7 @@ class RuntimeWorkflowService:
         self, session_id: str, method: str, values: dict[str, Any], *, user_id: str
     ) -> dict[str, Any]:
         session = await self.store.get_session(session_id, user_id=user_id)
-        if (
-            method not in {"session.tree", "session.configuration.get"}
-            and not session.takeover
-        ):
+        if method != "session.tree" and not session.takeover:
             raise WorkflowError("takeover_required", "请先授权工作台控制此会话。")
         row = {
             "user_id": user_id,
@@ -207,8 +204,6 @@ class RuntimeWorkflowService:
             "session.tree": "session.execution_position.read",
             "session.position.select": "session.execution_position.select",
             "session.close": "session.close",
-            "session.configuration.get": "session.configuration.read",
-            "session.configuration.update": "session.configuration.update",
         }[method]
         if not any(
             cap.get("capabilityId") == required
@@ -262,11 +257,6 @@ class RuntimeWorkflowService:
                         "expectedRevision": request["expectedRevision"],
                         "catalogRevision": request["catalogRevision"],
                         "selections": request["selections"],
-                        **(
-                            {"configuration": request["configuration"]}
-                            if "configuration" in request
-                            else {}
-                        ),
                     },
                 )
                 if reservation.get("reserved") is False:
@@ -325,9 +315,7 @@ class RuntimeWorkflowService:
     @staticmethod
     def _view(row: dict[str, Any], state: dict[str, Any]) -> WorkflowView:
         return WorkflowView(
-            protocolVersion="1.2"
-            if row["runtime_type"] == "acp" or "configuration" in row["request"]
-            else "1.1",
+            protocolVersion="1.1",
             id=row["id"],
             kind=row["kind"],
             connectorId=row["connector_id"],

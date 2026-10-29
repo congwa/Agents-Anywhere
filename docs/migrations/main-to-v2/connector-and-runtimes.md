@@ -52,10 +52,6 @@ Runtime 集成应该返回明确的 unsupported result 或 error。不能静默 
 | --- | --- | --- | --- |
 | Codex | 本地 CLI/app-server adapter，带 IPC 相关集成 | 使用 `openai-codex` 的原生 provider；active code 只走 SDK | 从部署和配置中移除 `CODEX_BIN`、app-server 和 IPC 假设。 |
 | Claude | Claude SDK adapter | 原生 `ClaudeProvider`/`ClaudeRuntime` | 重新验证声明的 capability 子集；不支持的行为必须保持可见。 |
-| Gemini ACP | 内置 ACP 清单 | 没有 active provider | 如果用户依赖它，就阻断正式切换；或者先实现 v2 provider。 |
-| Cursor ACP | 内置 ACP 清单 | 没有 active provider | 同上。 |
-| Grok Build ACP | 内置 ACP 清单 | 没有 active provider | 同上。 |
-| CodeBuddy ACP | 内置 ACP 清单 | 没有 active provider | 同上。 |
 
 `connector/_reference/` 下的旧实现只是参考材料，不是 runtime fallback。生产代码不能 import 它们。
 

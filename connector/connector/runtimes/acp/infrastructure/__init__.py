@@ -1,1 +1,0 @@
-"""ACP I/O adapters."""

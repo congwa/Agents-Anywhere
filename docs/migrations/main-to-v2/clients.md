@@ -107,7 +107,7 @@ Android 已经有 `apiPath()` helper，并且会给 HTTP/SSE/WebSocket URL 加 n
 - `/connectors/{id}/runtime-capabilities/*`;
 - `/connectors/{id}/agents/{runtime}/settings`.
 
-它还从 add-agent UI 里移除了 ACP runtimes。在这些调用迁移到上面描述的 API，并且 session event/rendering 行为通过验收 checklist 之前，Android 还不是 v2-compatible。
+在这些调用迁移到上面描述的 API，并且 session event/rendering 行为通过验收 checklist 之前，Android 还不是 v2-compatible。
 
 ## iOS 状态
 

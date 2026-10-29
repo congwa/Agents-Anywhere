@@ -85,7 +85,7 @@ def _schema_document(artifact: ProtocolSchema, version: str = "1.0") -> dict[str
         if isinstance(value, dict):
             if version == "1.0" and value.get("enum") == ["1.0", "1.1"]:
                 value.pop("enum"); value["const"] = "1.0"
-            if version == "1.1" and value.get("enum") == ["codex", "claude", "opencode", "acp", "dsh"]:
+            if version == "1.1" and value.get("enum") == ["codex", "claude", "opencode", "dsh"]:
                 value.pop("enum"); value["pattern"] = r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
             for child in value.values(): project(child)
         elif isinstance(value, list):

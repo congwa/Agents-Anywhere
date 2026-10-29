@@ -40,8 +40,7 @@ class SessionsController(
     suspend fun prepareRuntimeWorkspace(connector: String, runtime: String, project: String): Result<PreparedRuntimeWorkspace> = runCatching {
         val value = workflows.run("preparations", org.json.JSONObject().put("connectorId", connector).put("runtimeId", runtime).put("projectId", project).put("clientPreparationId", java.util.UUID.randomUUID().toString())) { it.optString("phase") == "ready" }
         val state = value.getJSONObject("state")
-        val schema = state.optJSONObject("configuration")?.let { AgentForm.configurationSchema(it) }
-        PreparedRuntimeWorkspace(value.getString("id"), state.getLong("revision"), state.getLong("catalogRevision"), sessionsApi.parseScopedModelCatalog(state.getJSONObject("catalog")).toNewSessionModelCatalog(), schema?.toString(), schema?.let { AgentForm.defaults(it) }.orEmpty())
+        PreparedRuntimeWorkspace(value.getString("id"), state.getLong("revision"), state.getLong("catalogRevision"), sessionsApi.parseScopedModelCatalog(state.getJSONObject("catalog")).toNewSessionModelCatalog())
     }.onFailure { if (it is CancellationException) throw it }
 
     fun dashboardSnapshotState(snapshot: RemoteDashboardSnapshot): SessionsState {
@@ -180,7 +179,6 @@ class SessionsController(
                         .put("createOperationId", draft.clientMessageId).put("clientMessageId", draft.clientMessageId)
                         .put("expectedRevision", prepared.expectedRevision).put("catalogRevision", prepared.catalogRevision)
                         .put("selections", org.json.JSONObject(draft.selections.toMap())).put("content", draft.content).apply {
-                            if (prepared.configurationSchema != null) put("configuration", org.json.JSONObject(prepared.configurationValues))
                         }) { it.optBoolean("messageAccepted") }
                     val session = bindAcceptedWorkflowSession(devices)
                     return@withContext NewSessionCreateOutcome.Created(session)

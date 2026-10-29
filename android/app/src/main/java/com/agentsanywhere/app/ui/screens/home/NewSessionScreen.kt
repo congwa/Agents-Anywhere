@@ -1038,11 +1038,6 @@ fun NewSessionScreen(
                         finally { preparingRuntime = false }
                     }
                 }) { Text("准备工作区并加载模型") }
-                preparedRuntimeWorkspace?.configurationSchema?.let { schema ->
-                    StructuredAgentFields(org.json.JSONObject(schema), preparedRuntimeWorkspace!!.configurationValues, !preparingRuntime) { key, value ->
-                        preparedRuntimeWorkspace = preparedRuntimeWorkspace?.let { current -> current.copy(configurationValues = if (value == null) current.configurationValues - key else current.configurationValues + (key to value)) }
-                    }
-                }
                 val runtimeError = when {
                     checkingDevices || checkingAgents || inventory.loading -> null
                     onlineDevices.isEmpty() -> stringResource(R.string.new_session_no_online_agent)

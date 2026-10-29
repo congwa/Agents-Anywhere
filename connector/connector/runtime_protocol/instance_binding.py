@@ -464,12 +464,6 @@ class RuntimeInstance(AgentRuntime):
     async def execute_workflow(self, request: RuntimeWorkflowRequest) -> RuntimeWorkflowResult:
         return await self.native_runtime.execute_workflow(request)
 
-    async def get_session_configuration(self, session_id: str) -> dict[str, Any]:
-        return await self.native_runtime.get_session_configuration(session_id)
-
-    async def update_session_configuration(self, session_id: str, values: Mapping[str, Any]) -> dict[str, Any]:
-        return await self.native_runtime.update_session_configuration(session_id, values)
-
     @property
     def sync_mode(self) -> str:
         return self.native_runtime.sync_mode

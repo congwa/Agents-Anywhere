@@ -5,7 +5,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { configSchema, formDefaults, formErrors, type AgentConfiguration, type FormSchema } from "@/features/dashboard/runtime-forms"
+import { formErrors, type FormSchema } from "@/features/dashboard/runtime-forms"
 
 export function StructuredAgentFields({ schema, values, onChange, disabled }: { schema: FormSchema; values: Record<string, unknown>; onChange: (values: Record<string, unknown>) => void; disabled?: boolean }) {
   const prefix = React.useId()
@@ -25,11 +25,4 @@ export function StructuredAgentFields({ schema, values, onChange, disabled }: { 
       {errors[key] ? <p role="alert" className="text-sm text-destructive">{errors[key]}</p> : null}
     </Field>
   })}</FieldGroup>
-}
-
-export function AgentConfigurationFields({ configuration, onChange, disabled }: { configuration: AgentConfiguration; onChange: (values: Record<string, string | boolean>) => void; disabled?: boolean }) {
-  const schema = React.useMemo(() => configSchema(configuration), [configuration])
-  const [values, setValues] = React.useState<Record<string, unknown>>(() => formDefaults(schema))
-  React.useEffect(() => { const next = formDefaults(schema); setValues(next); onChange(next as Record<string, string | boolean>) }, [configuration.revision])
-  return <StructuredAgentFields schema={schema} values={values} disabled={disabled} onChange={next => { setValues(next); onChange(next as Record<string, string | boolean>) }} />
 }

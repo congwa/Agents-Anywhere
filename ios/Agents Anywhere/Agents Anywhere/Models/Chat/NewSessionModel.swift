@@ -35,8 +35,6 @@ final class NewSessionModel {
     private(set) var workflowResponding = false
     @ObservationIgnored private let workflowAPI: V2RuntimeWorkflowAPI?
     @ObservationIgnored private var preparedWorkflow: V2RuntimeWorkflow?
-    var agentConfigurationValues: [String: JSONValue] = [:]
-    var agentConfigurationSchema: JSONValue? { preparedWorkflow?.state.configuration.map { AgentForm.configurationSchema($0) } }
     private(set) var prepared: V2PreparedSession?
     private(set) var isPreparing = false
     private(set) var isCreating = false
@@ -287,9 +285,6 @@ final class NewSessionModel {
                 let operation = try await workflowAPI.post("preparations", ["connectorId": .string(connectorID), "runtimeId": .string(runtimeID), "projectId": .string(project.id), "clientPreparationId": .string(UUID().uuidString)])
                 let ready = try await awaitWorkflow(operation, until: { $0.state.phase == "ready" }, version: version)
                 guard let catalog = ready.state.catalog else { throw HTTPError.invalidResponse }
-                if preparedWorkflow?.state.configuration != ready.state.configuration {
-                    agentConfigurationValues = ready.state.configuration.map { AgentForm.defaults(AgentForm.configurationSchema($0)) } ?? [:]
-                }
                 preparedWorkflow = ready
                 value = V2PreparedSession(runtime: value.runtime, capabilities: value.capabilities, catalogs: V2SessionCatalogs(model: catalog, permission: value.catalogs.permission))
             } else { preparedWorkflow = nil }
@@ -404,17 +399,11 @@ final class NewSessionModel {
         guard isValid, !Task.isCancelled else { return nil }
         let target = (project.connectorId, runtime.id, project.id)
         let chosenSelections = settings.selections
-        let chosenConfiguration = agentConfigurationValues
-        let chosenConfigurationSnapshot = preparedWorkflow?.state.configuration
         await prepareTarget()
         guard isValid, !Task.isCancelled, prepared != nil, connectorID == target.0, runtimeID == target.1,
               connector?.status == .online, network.availability != .offline else { return nil }
         guard settings.hasValidSelections, chosenSelections == settings.selections else {
             error = String(localized: "可用选项已变化，请检查模型和权限后再次发送。")
-            return nil
-        }
-        guard chosenConfigurationSnapshot == preparedWorkflow?.state.configuration, chosenConfiguration == agentConfigurationValues else {
-            error = "Agent 配置已变化，请重新确认后发送。"
             return nil
         }
         var didSubmit = false
@@ -435,7 +424,6 @@ final class NewSessionModel {
                     "clientMessageId": .string(submission.pending.id), "content": .string(text),
                     "selections": .object(Dictionary(uniqueKeysWithValues: settings.selections.map { ($0.key.rawValue, .string($0.value)) }))]
                 body["title"] = .string(String(text.prefix(80)))
-                if preparedWorkflow.state.configuration != nil { body["configuration"] = .object(chosenConfiguration) }
                 preference.pendingWorkflowIDs = Array(Set((preference.pendingWorkflowIDs ?? []) + [submission.pending.id])); persist()
                 let started = try await workflowAPI.post("creations", body)
                 let admitted = try await awaitWorkflow(started, until: { $0.state.messageAccepted == true }, version: preparationVersion)

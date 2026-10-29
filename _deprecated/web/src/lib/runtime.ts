@@ -17,7 +17,6 @@ const RUNTIMES: Record<string, RuntimeMeta> = {
   codex: { id: "codex", label: "Codex", accentVar: "var(--agent-codex)" },
   claude: { id: "claude", label: "Claude Code", accentVar: "var(--agent-claude)" },
   opencode: { id: "opencode", label: "OpenCode", accentVar: "var(--agent-opencode)" },
-  acp: { id: "acp", label: "ACP", accentVar: "var(--agent-cursor)" },
 };
 
 // Runtimes the daemon can actually drive end-to-end today. Add modal

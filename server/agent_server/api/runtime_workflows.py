@@ -10,7 +10,6 @@ from agent_server.core.runtime_workflows import (
     CloseRuntimeSessionRequest,
     PositionSelectionRequest,
     PrepareWorkspaceRequest,
-    UpdateAgentConfigurationRequest,
     WorkflowInteractionResponse,
     WorkflowView,
 )
@@ -106,36 +105,6 @@ async def cancel(
 ):
     return await invoke(
         service.cancel(identifier, kind, payload.operationId, user_id=user_id)
-    )
-
-
-@router.get("/sessions/{session_id}/configuration")
-async def get_configuration(
-    session_id: str,
-    service: Annotated[RuntimeWorkflowService, Depends(get_runtime_workflow_service)],
-    user_id: Annotated[str, Depends(current_user_id)],
-):
-    return await invoke(
-        service.session_action(
-            session_id, "session.configuration.get", {}, user_id=user_id
-        )
-    )
-
-
-@router.post("/sessions/{session_id}/configuration")
-async def update_configuration(
-    session_id: str,
-    payload: UpdateAgentConfigurationRequest,
-    service: Annotated[RuntimeWorkflowService, Depends(get_runtime_workflow_service)],
-    user_id: Annotated[str, Depends(current_user_id)],
-):
-    return await invoke(
-        service.session_action(
-            session_id,
-            "session.configuration.update",
-            payload.model_dump(),
-            user_id=user_id,
-        )
     )
 
 

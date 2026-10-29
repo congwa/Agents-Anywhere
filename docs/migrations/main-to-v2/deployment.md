@@ -13,7 +13,7 @@
 - 本地或 S3 file-storage 配置和 object 数量；
 - Server secret、public origin、CORS、OAuth 和 setup configuration 的配置项名称；
 - Connector ids、versions、hosts、config paths 和本地 data directories；
-- 每个 Connector 的 active runtimes，特别是 ACP-backed runtimes；
+- 每个 Connector 的 active runtimes；
 - 当前 session/timeline/user/connector row counts；
 - 可用 maintenance window 和 rollback decision owner。
 
@@ -45,7 +45,7 @@ uv run python -m agent_server.infra.db.migrations rehearse-v1 \
 
 把 v2 Server 和 Web 部署到演练数据库上，然后至少升级一个一次性或已备份的 Connector host。完成验收 checklist。
 
-如果生产依赖 ACP runtime、未迁移的移动端客户端，或者还没有复制并验证的 file backend，那么演练就不完整。
+如果生产依赖尚未提供 v2 provider 的 Runtime、未迁移的移动端客户端，或者还没有复制并验证的 file backend，那么演练就不完整。
 
 ## 4. 准备 v2 基础设施
 
@@ -99,7 +99,7 @@ AGENT_SERVER_SECRET
 7. 验证一个已有 session sync，以及一个新的 create-and-start flow。
 8. 根据 declared capabilities 验证 attachments、interrupt、selections、notices 和 commands。
 
-如果某个 Connector 必须提供 ACP runtime，在 v2 provider 存在或 workload 已迁走之前，不要升级它。
+如果某个 Connector 依赖的 Runtime 尚无 v2 provider，在 provider 实现或 workload 已迁走之前，不要升级它。
 
 ## 7. 客户端切换
 

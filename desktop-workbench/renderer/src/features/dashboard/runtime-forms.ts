@@ -1,6 +1,4 @@
 import Ajv2020 from "ajv/dist/2020"
-export type AgentConfigOption = { id?: string; configId?: string; name: string; category?: string; type: "select" | "boolean"; currentValue: string | boolean; options?: ({ value: string; name: string } | { name: string; options: { value: string; name: string }[] })[] }
-export type AgentConfiguration = { revision: number; options: AgentConfigOption[] }
 export type FormProperty = { type?: string; title?: string; description?: string; default?: unknown; enum?: string[]; enumNames?: string[]; items?: { type?: string; enum?: string[] }; minLength?: number; maxLength?: number; minimum?: number; maximum?: number; minItems?: number; maxItems?: number }
 export type FormSchema = { type?: string; properties?: Record<string, FormProperty>; required?: string[] }
 export function formDefaults(schema: FormSchema): Record<string, unknown> {
@@ -27,11 +25,4 @@ export function formErrors(schema: FormSchema, values: Record<string, unknown>):
       return [field, error.keyword === "required" ? "请填写此项" : "请填写有效值"]
     }))
   } catch { return { _form: "Agent 表单结构无效" } }
-}
-export function configSchema(configuration: AgentConfiguration): FormSchema {
-  return { type: "object", properties: Object.fromEntries(configuration.options.filter(option => option.category !== "model").map(option => {
-    const key = option.configId ?? option.id!
-    const choices = (option.options ?? []).flatMap(group => "options" in group ? group.options : [group])
-    return [key, { type: option.type === "boolean" ? "boolean" : "string", title: option.name, default: option.currentValue, ...(option.type === "select" ? { enum: choices.map(item => item.value), enumNames: choices.map(item => item.name) } : {}) }]
-  })) }
 }

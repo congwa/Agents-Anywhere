@@ -158,7 +158,6 @@
             "codex",
             "claude",
             "opencode",
-            "acp",
             "dsh"
           ],
           "title": "Runtime",
@@ -483,7 +482,6 @@
                 "codex",
                 "claude",
                 "opencode",
-                "acp",
                 "dsh"
               ],
               "type": "string"
@@ -543,7 +541,6 @@
                 "codex",
                 "claude",
                 "opencode",
-                "acp",
                 "dsh"
               ],
               "type": "string"
@@ -705,7 +702,6 @@
             "codex",
             "claude",
             "opencode",
-            "acp",
             "dsh"
           ],
           "title": "Runtime",
@@ -943,7 +939,6 @@
             "codex",
             "claude",
             "opencode",
-            "acp",
             "dsh"
           ],
           "title": "Runtime",
@@ -1264,7 +1259,6 @@
                 "codex",
                 "claude",
                 "opencode",
-                "acp",
                 "dsh"
               ],
               "type": "string"

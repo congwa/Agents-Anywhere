@@ -11,7 +11,7 @@ import { runtimeAccent, runtimeLabel } from "../../lib/runtime";
 
 type AddableRuntime = { id: string; placeholder: string };
 
-// Runtimes the daemon can actually drive end-to-end. OpenCode / ACP show up
+// Runtimes the daemon can actually drive end-to-end. OpenCode shows up
 // elsewhere in the codebase but capabilities discovery doesn't support them
 // yet, so we don't pretend we can scan for them.
 const SCANNABLE_RUNTIMES: AddableRuntime[] = [

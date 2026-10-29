@@ -50,10 +50,6 @@
 ## 运行时覆盖决策
 
 - [ ] 生产 runtime inventory 只包含 v2-supported providers；或者每个 unsupported dependency 都有已批准的迁移方案或 blocker。
-- [ ] Gemini ACP 依赖已解决。
-- [ ] Cursor ACP 依赖已解决。
-- [ ] Grok Build ACP 依赖已解决。
-- [ ] CodeBuddy ACP 依赖已解决。
 
 ## 网页端
 

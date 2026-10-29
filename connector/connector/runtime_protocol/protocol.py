@@ -51,12 +51,6 @@ class AgentRuntime(ABC):
         """Control-plane operation: never queue behind an engine/UI continuation."""
         raise RuntimeUnsupportedError(request.operation)
 
-    async def get_session_configuration(self, session_id: str) -> dict[str, Any]:
-        raise RuntimeUnsupportedError("get_session_configuration")
-
-    async def update_session_configuration(self, session_id: str, values: Mapping[str, Any]) -> dict[str, Any]:
-        raise RuntimeUnsupportedError("update_session_configuration")
-
     async def stop(self) -> None:
         pass
 

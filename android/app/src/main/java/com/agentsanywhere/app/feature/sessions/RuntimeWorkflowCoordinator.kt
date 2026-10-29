@@ -166,4 +166,4 @@ class RuntimeWorkflowCoordinator(
 }
 private fun String.urlEncoded(): String = java.net.URLEncoder.encode(this, "UTF-8").replace("+", "%20")
 
-data class PreparedRuntimeWorkspace(val preparationId: String, val expectedRevision: Long, val catalogRevision: Long, val catalog: NewSessionModelCatalog, val configurationSchema: String? = null, val configurationValues: Map<String, Any> = emptyMap())
+data class PreparedRuntimeWorkspace(val preparationId: String, val expectedRevision: Long, val catalogRevision: Long, val catalog: NewSessionModelCatalog)

@@ -2,7 +2,7 @@ package com.agentsanywhere.app.feature.sessions
 
 import org.json.JSONObject
 
-/** ACP form values stay typed; empty text, false and cancellation are distinct. */
+/** Structured form values stay typed; empty text, false and cancellation are distinct. */
 object AgentForm {
     fun defaults(schema: JSONObject): Map<String, Any> {
         val properties = schema.optJSONObject("properties") ?: return emptyMap()
@@ -35,26 +35,4 @@ object AgentForm {
         }
     }
 
-    fun configurationSchema(snapshot: JSONObject): JSONObject {
-        val properties = JSONObject()
-        val options = snapshot.optJSONArray("options")
-        for (i in 0 until (options?.length() ?: 0)) {
-            val option = options!!.getJSONObject(i)
-            if (option.optString("category") == "model") continue
-            val field = JSONObject().put("title", option.getString("name")).put("type", if (option.getString("type") == "boolean") "boolean" else "string").put("default", option.get("currentValue"))
-            if (option.getString("type") == "select") {
-                val values = org.json.JSONArray()
-                val names = org.json.JSONArray()
-                val groups = option.optJSONArray("options")
-                for (j in 0 until (groups?.length() ?: 0)) {
-                    val group = groups!!.getJSONObject(j)
-                    val children = group.optJSONArray("options") ?: org.json.JSONArray().put(group)
-                    for (k in 0 until children.length()) { values.put(children.getJSONObject(k).getString("value")); names.put(children.getJSONObject(k).getString("name")) }
-                }
-                field.put("enum", values).put("enumNames", names)
-            }
-            properties.put(option.optString("configId", option.optString("id")), field)
-        }
-        return JSONObject().put("type", "object").put("properties", properties)
-    }
 }

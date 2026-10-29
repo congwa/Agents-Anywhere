@@ -300,7 +300,6 @@ abstract class AndroidV2ReleaseGateTask : DefaultTask() {
                 add("legacy route baseline contains ${debtEntries.size} debt entries")
             }
             sources.forEach { (path, source) ->
-                ACP_RUNTIME_LITERAL.find(source)?.let { add("$path: ACP-specific production runtime") }
                 SERVER_TURN_OWNERSHIP.find(source)?.let {
                     add("$path: removed Server turn-ownership protocol")
                 }
@@ -319,13 +318,12 @@ abstract class AndroidV2ReleaseGateTask : DefaultTask() {
             )
         }
         logger.lifecycle(
-            "Android v2 release gate passed: zero legacy debt, no ACP runtime, " +
+            "Android v2 release gate passed: zero legacy debt, " +
                 "no Server turn ownership, single namespaces.",
         )
     }
 
     companion object {
-        private val ACP_RUNTIME_LITERAL = Regex("[\\\"'](?:ACP|acp)[\\\"']")
         private val SERVER_TURN_OWNERSHIP = Regex(
             "\\bturnId\\b|[\\\"']turn[._](?:start|end)[\\\"']",
         )

@@ -2,7 +2,6 @@
 
 import { RuntimeWorkflowPanel } from "@/components/session/runtime-workflow-panel"
 import { useWorkspacePreparation } from "@/components/session/use-workspace-preparation"
-import { AgentConfigurationFields } from "@/components/session/structured-agent-fields"
 
 import * as React from "react"
 import { Monitor, ChevronDown, ArrowUp, Loader2, Check } from "lucide-react"
@@ -256,7 +255,6 @@ export function TaskComposer() {
   const [catalogRefreshKey, setCatalogRefreshKey] = React.useState(0)
   const needsPreparation = Boolean(findCapability(runtimeCapabilities, "runtime.workspace.prepare", selectedRuntimeScope)?.supported)
   const preparation = useWorkspacePreparation(authSession?.accessToken, `${selectedConnectorId}:${selectedAgent}:${workspace?.path ?? ""}`)
-  const [preparedConfiguration, setPreparedConfiguration] = React.useState<Record<string, string | boolean>>({})
   React.useEffect(() => {
     if (needsPreparation) setModelCatalog(preparation.operation?.state.phase === "ready" ? preparation.operation.state.catalog ?? null : null)
   }, [needsPreparation, preparation.operation])
@@ -873,7 +871,7 @@ export function TaskComposer() {
         modelId: selectedModel, reasoningId: selectedReasoning, permissionMode: selectedPermissionMode,
         request: { ...createBody, content: messageText, selections, clientMessageId },
         ...(needsPreparation && preparation.operation ? { preparedWorkspace: { preparationId: preparation.operation.id,
-          expectedRevision: preparation.operation.state.revision, catalogRevision: preparation.operation.state.catalogRevision!, ...(preparation.operation.state.configuration ? { configuration: preparedConfiguration } : {}) } } : {}),
+          expectedRevision: preparation.operation.state.revision, catalogRevision: preparation.operation.state.catalogRevision! } } : {}),
       }, optimisticMessage, (id) => toolSidebarStore.migrateSession(localSessionId, id))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("createFailed"))
@@ -978,7 +976,6 @@ export function TaskComposer() {
             catch (error) { toast.error(String(error)) }
           }}>准备工作区并加载模型</Button>
           {preparation.operation ? <RuntimeWorkflowPanel operation={preparation.operation} pending={preparation.pending} error={preparation.error} onRespond={preparation.respond} onCancel={preparation.cancel} /> : preparation.error ? <p role="alert">{preparation.error}</p> : null}
-          {preparation.operation?.state.phase === "ready" && preparation.operation.state.configuration ? <AgentConfigurationFields key={preparation.operation.id} configuration={preparation.operation.state.configuration} onChange={setPreparedConfiguration} disabled={creating} /> : null}
         </div> : null}
         <div
           ref={composerRef}

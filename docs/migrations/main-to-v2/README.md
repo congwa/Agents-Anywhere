@@ -37,7 +37,7 @@
 | 分布式协调 | 进程内 presence 和 RPC | Redis 负责 lease、Pub/Sub、ticket、lock 和 relay | 准备 Redis，但不要把它当持久化存储。 |
 | Connector runtime API | dict 形态的 `Adapter` 和 `notification_sink` | `RuntimeProvider`、`AgentRuntime` 和 `RuntimeHostClient` | 把 runtime 集成迁到 typed、双向协议。 |
 | Codex | CLI/app-server 和偏 IPC 的 adapter | 官方 `openai-codex` SDK 路径 | 移除 app-server/IPC 相关配置假设。 |
-| Runtime 支持 | Codex、Claude 和内置 ACP manifests | 原生 Codex 和 Claude providers | ACP 形态的 Gemini、Cursor、Grok Build、CodeBuddy 在实现 v2 provider 前都视为不可用。 |
+| Runtime 支持 | Codex、Claude 等旧版集成 | 原生 Codex 和 Claude providers | 逐项确认所需 Runtime 在 v2 中有可用 provider。 |
 | Connector 本地数据 | `~/.agent-server`、SQLite sync state | `~/.agents-anywhere`、原子 JSON sync state | 第一次启动 v2 前备份旧目录；让一次性迁移自动执行。 |
 | Session 读取 | 合并的 `/state` 响应 | `meta`、`timeline`、`runtime/*` 和恢复快照 | 按数据归属边界更新客户端。 |
 | Session 动作 | `/messages`、`/interrupt`、approval resolve 路由 | `/runtime/messages`、`/runtime/interrupt`、`/runtime/notices/*` | 替换旧 action endpoint 和 payload。 |
@@ -53,7 +53,6 @@
 - v2 Connector 需要 v2 connector endpoints 和 runtime RPC methods。
 - v2 Web 客户端是当前 v2 session API 的参考客户端。
 - Android 和 iOS 目前虽然加了 v2 namespace，但仍然包含旧的 session 和 runtime-management 调用。客户端迁移 checklist 完成前，它们还不能作为 release-compatible 客户端发布。
-- `main` 上可用的 ACP runtimes，在当前 v2 基线里没有 active provider。
 
 ## 推荐顺序
 
@@ -61,7 +60,7 @@
 2. 备份 v1 SQLite 文件、文件存储、Connector 数据目录和部署配置。
 3. 在一次性数据库上演练 SQLite 到 PostgreSQL 的导入，并保留生成的验证报告。
 4. 在 staging 环境一起验证 v2 Server、Web 和 Connector。
-5. 解决验收 checklist 中所有 blocked item，特别是移动端 session API 和任何 ACP runtime 依赖。
+5. 解决验收 checklist 中所有 blocked item，特别是移动端 session API 和 Runtime 依赖。
 6. 停止 v1 写入，把最终数据导入新的空 PostgreSQL 数据库，然后一次性部署 v2 Server 和 Web。
 7. 升级 Connectors，验证实时 runtime discovery，然后再发布兼容客户端。
 

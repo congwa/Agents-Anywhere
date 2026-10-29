@@ -160,8 +160,7 @@ CLAUDE_BIN=/path/to/claude
 ```
 
 DSH requires the bridge integration described in
-[DSH Bridge Next](../dsh-bridge-next/README.md). Legacy ACP adapters are not part
-of the default provider registry.
+[DSH Bridge Next](../dsh-bridge-next/README.md).
 
 Connected sessions expose native slash commands through a live runtime catalog.
 See [runtime slash commands](docs/runtime-commands.md) for Codex commands, DSH

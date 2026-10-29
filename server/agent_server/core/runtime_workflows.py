@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field
 
 Identity = str
 
@@ -48,9 +48,6 @@ class BeginCreationRequest(BaseModel):
     expectedRevision: int = Field(ge=0, le=9007199254740991)
     catalogRevision: int = Field(ge=0, le=9007199254740991)
     selections: dict[Literal["model", "permission"], str | None]
-    configuration: dict[str, StrictStr | StrictBool] | None = Field(
-        default=None, max_length=128
-    )
     clientMessageId: str = Field(min_length=1, max_length=160)
     content: str = Field(min_length=1, max_length=1000000)
     title: str | None = Field(default=None, max_length=4096)
@@ -68,7 +65,7 @@ class WorkflowInteractionResponse(BaseModel):
 
 class WorkflowView(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    protocolVersion: Literal["1.1", "1.2"] = "1.1"
+    protocolVersion: Literal["1.1"] = "1.1"
     id: str
     kind: Literal["preparation", "creation"]
     connectorId: str
@@ -90,10 +87,3 @@ class CloseRuntimeSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ownerGeneration: str = Field(min_length=1, max_length=160)
     closeOperationId: str = Field(min_length=1, max_length=160)
-
-
-class UpdateAgentConfigurationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    expectedRevision: int = Field(ge=0, le=9007199254740991)
-    operationId: str = Field(min_length=1, max_length=160)
-    values: dict[str, StrictStr | StrictBool] = Field(max_length=128)

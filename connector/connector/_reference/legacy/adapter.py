@@ -8,7 +8,7 @@ NotificationSink = Callable[[str, dict[str, Any]], Awaitable[None]] | None
 
 @runtime_checkable
 class Adapter(Protocol):
-    """Per-runtime backend client (Codex / Claude / OpenCode / ACP).
+    """Per-runtime backend client (Codex / Claude / OpenCode).
 
     `BackendRpcClient` holds a dict of these keyed by runtime name and routes
     incoming RPCs by `params["runtime"]`. Every adapter must accept a

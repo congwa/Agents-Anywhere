@@ -19,8 +19,8 @@ from agent_server.core.runtime_identity import (
     validate_runtime_type,
 )
 
-_PROTOCOL_1_RUNTIME_NAMES = ("codex", "claude", "opencode", "acp", "dsh")
-LegacyRuntimeName = Literal["codex", "claude", "opencode", "acp", "dsh"]
+_PROTOCOL_1_RUNTIME_NAMES = ("codex", "claude", "opencode", "dsh")
+LegacyRuntimeName = Literal["codex", "claude", "opencode", "dsh"]
 
 
 def _validate_runtime_name(value: str) -> str:

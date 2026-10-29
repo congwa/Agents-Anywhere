@@ -2,15 +2,6 @@ import Foundation
 
 struct V2RuntimeWorkflowAPI {
     let transport: any HTTPTransport
-    func configuration(sessionID: String) async throws -> JSONValue {
-        try await transport.send(HTTPRequest<EmptyRequestBody, JSONValue>(method: .get, path: "/runtime-workflows/sessions/\(sessionID.v2URLPathComponentEncoded)/configuration"))
-    }
-    func updateConfiguration(sessionID: String, operationID: String, expectedRevision: Int, values: [String: JSONValue]) async throws -> JSONValue {
-        try await transport.send(HTTPRequest<JSONValue, JSONValue>(method: .post, path: "/runtime-workflows/sessions/\(sessionID.v2URLPathComponentEncoded)/configuration", body: .object(["operationId": .string(operationID), "expectedRevision": .number(Double(expectedRevision)), "values": .object(values)])))
-    }
-    func components(connectorID: String, runtimeID: String, request: [String: JSONValue]) async throws -> JSONValue {
-        try await transport.send(HTTPRequest<JSONValue, JSONValue>(method: .post, path: "/connectors/\(connectorID.v2URLPathComponentEncoded)/runtimes/\(runtimeID.v2URLPathComponentEncoded)/components", body: .object(request)))
-    }
     func post(_ path: String, _ body: [String: JSONValue]) async throws -> V2RuntimeWorkflow {
         try await transport.send(HTTPRequest<JSONValue, V2RuntimeWorkflow>(method: .post, path: "/runtime-workflows/" + path, body: .object(body)))
     }

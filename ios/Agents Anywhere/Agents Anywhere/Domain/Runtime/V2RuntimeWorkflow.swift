@@ -16,7 +16,6 @@ nonisolated struct V2RuntimeWorkflowState: Decodable, Hashable {
     let revision: Int
     let catalogRevision: Int?
     let catalog: V2ModelCatalog?
-    let configuration: JSONValue?
     let messageAccepted: Bool?
     let created: Bool?
     let interactions: [V2WorkflowInteraction]

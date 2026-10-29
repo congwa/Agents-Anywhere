@@ -85,7 +85,7 @@ curl -i https://web.agents-anywhere.com/api/v2/health
 
 ### 设备在线，但某个操作不可用
 
-设备在线表示 Connector 已连接。继续检查所选 Runtime 的状态和错误信息，确认它已配置并可用，再查看当前会话是否支持该操作。需要进一步定位时，查看 Connector 日志。旧版 ACP provider 不在当前默认支持范围内。
+设备在线表示 Connector 已连接。继续检查所选 Runtime 的状态和错误信息，确认它已配置并可用，再查看当前会话是否支持该操作。需要进一步定位时，查看 Connector 日志。
 
 ### 更新提示无法下载
 
