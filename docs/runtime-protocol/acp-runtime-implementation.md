@@ -1,10 +1,21 @@
-# ACP Runtime 实现与验证记录
+# ACP Runtime 实现记录
 
-记录日期：2026-10-29。实现位于 `Agents-Anywhere-pi-runtime-design` 工作树，保留原有未提交 Pi 改动。本文按源码实际状态记录；完整目标见 [实施约定](acp-runtime-integration-plan.md)。
+记录日期：2026-10-29。当前工作树为 `Agents-Anywhere-acp-agent-composition`，分支为 `feat/con+be/acp-agent-composition`。基于上游 `e5c0179d`，参考分支 `feat/con+be/pi-runtime` 的源码提交 `b8575565` 以 `d6e5f5a5` 整体移入；没有搬入原工作树中未提交的 `tests/` 改动。产品版本不变。
 
-## 当前交付边界
+## 本轮源码实现
 
-**已实现通用协调层和四端基础适配，完整 Pi ACP 接入尚未完成，也未开放创建入口。** `AcpProvider.discover()` 返回不可用及 `pi_acp_upstream_hooks_pending`；`create_runtime()` 明确拒绝。既有 Pi Runtime 和原绑定不变。生产更新源、公钥为空，避免把临时验证组件当成正式组件交付。
+- Web、Electron、Android、iOS 的准备、异步创建、初始化交互、结构化表单与按账号隔离的恢复引用直接复用参考分支源码。
+- `AcpAgentApplication` 只依赖 `AgentCapabilityPort`；生命周期、配置、消息、命令和回执经统一端口调用，不导入 Pi 或 OpenMA SDK。
+- `PiCapabilities` 组合 OpenMA 的提示转换、历史回放、工具分类、命令目录及语法，与 AA 的工作区信任、持久接纳回执、工具审批、最终请求守卫和原生写锁。
+- 会话配置在四端复用已有结构化表单；Web/Electron 使用同一份弹窗源码，Android 和 iOS 通过既有设置入口打开。Server 保留配置读取／更新能力，配置读取不要求取得会话写控制。
+- 已创建会话的附件路径接入 ACP：图片作为图片块，文件先校验再提供本机内容路径；命令复用现有四端命令界面。准备式创建的首条附件仍未接入，Web/Electron 明确保留附件草稿。
+- 能力随绑定状态进入持久 outbox；四端按有效能力决定入口，不按 Pi 或 DSH 名称分支。
+
+按用户最新要求，本轮只搬移和修改源码，不运行编译、测试、探针或其他校验。下方历史表格记录参考工作树较早阶段的情况，不代表当前分支的校验结果；当前已实现部分以上述源码说明为准。
+
+## 迁移前的阶段记录
+
+以下是参考工作树早期的阶段记录。当前源码已改为组合适配结构；Pi Profile 的组件门禁为 `pi_acp_release_acceptance_pending`，安装并选中符合要求的签名组件后由 `AcpProvider` 装配运行。正式发布源、公钥与跨平台组件发行仍未配置。
 
 | 范围 | 已实现 | 后续仍需实现或验证 |
 | --- | --- | --- |

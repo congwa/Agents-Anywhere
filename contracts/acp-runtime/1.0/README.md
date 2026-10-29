@@ -6,6 +6,6 @@ ACP 协议只在 Connector 与 Agent 之间传输；本目录定义平台侧配�
 - 表单回答为 `{kind:"form",values:{...}}`；动作单独使用 accept、decline、cancel；空字符串与取消不同。
 - 组件激活仅影响新会话；回退不还原共享数据。安装来源必须经过受信签名验证。
 - 来源投影替换必须 complete=true；本 schema 的存在不代表 Server 已发布该能力，未实现原子替换前不得发送该事件。
-- Pi 入口在上游公开钩子、三平台执行及四端验收完成前保持不可用。
+- Pi 通过统一能力端口组合 OpenMA 与 AA 执行内核，组件可用性由已安装的签名发行决定；源码实现不再等待上游提供额外钩子。
 
 契约导出及 SHA-256 清单使用 `connector/scripts/export-acp-contracts.py`。

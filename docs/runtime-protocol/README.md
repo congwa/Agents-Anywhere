@@ -160,8 +160,8 @@ support per-turn SDK options can apply current state at dispatch time.
 
 ## Documents
 
-- [pi Runtime 接入设计：架构、领域模块与数据流（设计方案，未实现）](./pi-runtime-integration-plan.md)
-- [pi Runtime 客户端补充：Web、Android、iOS 与 Electron（设计方案，未实现）](./pi-runtime-clients-plan.md)
+- [pi Runtime 接入设计：架构、领域模块与数据流](./pi-runtime-integration-plan.md)
+- [pi Runtime 客户端补充：Web、Android、iOS 与 Electron](./pi-runtime-clients-plan.md)
 - [Runtime instances v2 rewrite](./runtime-instances-v2-rewrite.md)
 - [Connector -> Runtime ABC](./connector-to-runtime.md)
 - [Runtime -> Connector host client](./runtime-host-client.md)
@@ -174,3 +174,5 @@ support per-turn SDK options can apply current state at dispatch time.
 - [API documentation](../api/README.md)
 
 - [pi Runtime 实现记录](pi-runtime-implementation.md)
+
+- [ACP 组合适配与四端源码实施记录](acp-runtime-implementation.md)

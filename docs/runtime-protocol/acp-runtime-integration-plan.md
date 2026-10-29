@@ -10,9 +10,11 @@ flowchart LR
     Server --> Connector[Connector AcpRuntime]
     Connector --> Store[本机 SQLite 协调记录与 outbox]
     Connector --> Client[官方 Python ACP SDK]
-    Client -->|stdio 每会话独立进程| Agent[AA Pi ACP 入口]
-    Agent --> Openma[openma/pi-acp 公开 API]
-    Agent --> Enhancement[AA 执行侧增强]
+    Client -->|stdio 每会话独立进程| Application[通用 ACP 应用层]
+    Application --> Port[统一 Agent 能力端口]
+    Port --> Pi[Pi 组合适配层]
+    Pi --> Openma[OpenMA 已实现能力直接委托]
+    Pi --> Enhancement[缺失能力由 AA 补充]
     Enhancement --> SDK[固定 Pi SDK]
 ```
 
@@ -74,6 +76,6 @@ macOS/Linux 使用受监督独立进程组；Windows 挂起创建、加入启用
 
 ## 上游与首发门禁
 
-只使用 openma 正式发布的公开扩展点，不维护 fork，不使用深层 import、安装后 patch 或原型改写。所需行为见 [上游扩展要求](acp-pi-upstream-hooks.md)。当前缺失时可以继续通用层、四端、受控 Agent 与组件管理，但 Pi 创建入口保持 unavailable。
+通过统一能力端口组合 OpenMA 与 AA 执行内核，已有公开能力直接委托，缺失能力在 AA 侧补齐；不把等待上游公开钩子作为源码实现的前置条件，不使用深层 import、安装后 patch 或原型改写。旧的 [上游钩子调查](acp-pi-upstream-hooks.md) 仅保留为历史背景。四端和 Server/Connector 优先复用 `feat/con+be/pi-runtime` 的已有源码，组件发行仍通过现有签名流程。
 
-统一首发须同时满足：上游扩展公开发布、六项 Pi 增强完成、六个平台架构产物、四端链路验收及受控模型验证。不能删除审批、放宽最终请求守卫或降低恢复保证来通过门禁。真实供应商认证与调用单独授权。
+正式发行与源码实现分开：六项 Pi 增强、目标平台产物和四端运行情况按发行阶段登记。当前用户要求优先搬移和实现源码，暂不执行校验。不能删除审批、放宽最终请求守卫或降低恢复保证来通过门禁。真实供应商认证与调用单独授权。

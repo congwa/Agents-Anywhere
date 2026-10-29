@@ -1,4 +1,6 @@
-# Pi ACP 上游扩展要求与阻塞证据
+# Pi ACP 上游钩子调查（历史方案）
+
+当前实现已采用统一能力端口与 Pi 组合适配层：OpenMA 已有公开能力直接委托，缺失能力由 AA 补充，不再等待本表中的上游钩子才开展源码实现。下文保留原始调查背景，现行结构见 [实施约定](acp-runtime-integration-plan.md)。
 
 2026-10-29 核对 [openma/pi-acp v0.1.8](https://github.com/openma-ai/pi-acp/releases/tag/v0.1.8) 与 main 提交 `ffea89d285ea6d8219a4b86f23429f4ebf5e644e`。这是本次核对快照，不代表后续版本已满足要求。
 
