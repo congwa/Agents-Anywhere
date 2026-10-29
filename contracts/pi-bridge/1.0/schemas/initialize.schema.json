@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "runtimeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "sessionNamespace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "protocolVersion": {
+      "type": "string",
+      "const": "1.0"
+    }
+  },
+  "required": [
+    "runtimeId",
+    "sessionNamespace",
+    "protocolVersion"
+  ],
+  "additionalProperties": false
+}

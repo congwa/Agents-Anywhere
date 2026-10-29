@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "confirm"
+        },
+        "status": {
+          "type": "string",
+          "const": "submitted"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "status",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "select"
+        },
+        "status": {
+          "type": "string",
+          "const": "submitted"
+        },
+        "optionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "kind",
+        "status",
+        "optionId"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "input",
+            "editor"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "const": "submitted"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000000
+        }
+      },
+      "required": [
+        "kind",
+        "status",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "confirm",
+            "select",
+            "input",
+            "editor"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "const": "cancelled"
+        }
+      },
+      "required": [
+        "kind",
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "protocolVersion": "1.0",
+  "artifacts": [
+    {
+      "name": "initialize",
+      "path": "schemas/initialize.schema.json",
+      "sha256": "5cc3b51d7c27c83fc722e8a97b87487e6a53445e098c52309f37088dc142c6d5"
+    },
+    {
+      "name": "ping",
+      "path": "schemas/ping.schema.json",
+      "sha256": "866a653171345025ce8caad678b158812ff064933db3f86663bb70c261c9810a"
+    },
+    {
+      "name": "prepareWorkspace",
+      "path": "schemas/prepareWorkspace.schema.json",
+      "sha256": "d934cbb3ca028ad72f02d579d778f4eb24f85829959b834756c05f7243b41bb0"
+    },
+    {
+      "name": "getPreparation",
+      "path": "schemas/getPreparation.schema.json",
+      "sha256": "bde306068da83fc5f869c16d7a642ab205ae56d4be3f5ea4ddc1b7810aba2a07"
+    },
+    {
+      "name": "refreshPreparation",
+      "path": "schemas/refreshPreparation.schema.json",
+      "sha256": "4a3fcd7a858744b9daa6d08386a9f8db474000d6dec026415ae14618d5965325"
+    },
+    {
+      "name": "cancelPreparation",
+      "path": "schemas/cancelPreparation.schema.json",
+      "sha256": "bde306068da83fc5f869c16d7a642ab205ae56d4be3f5ea4ddc1b7810aba2a07"
+    },
+    {
+      "name": "respondPreparationInteraction",
+      "path": "schemas/respondPreparationInteraction.schema.json",
+      "sha256": "eedbd18479982f61f631f3285a5fc3e84a559dff3d849d603ed10e94dd99e15d"
+    },
+    {
+      "name": "reservePreparation",
+      "path": "schemas/reservePreparation.schema.json",
+      "sha256": "e6ba7a4a801a3d0d7f0b3127441a746fe0f6072dd97c5acb7171afdbd1c14c39"
+    },
+    {
+      "name": "beginCreateAndStartSession",
+      "path": "schemas/beginCreateAndStartSession.schema.json",
+      "sha256": "28fdbb5428acc70ec537dc4ff5ba083dad93dfea6167c7dee246a9a28a2fbc79"
+    },
+    {
+      "name": "getCreationOperation",
+      "path": "schemas/getCreationOperation.schema.json",
+      "sha256": "ee1cad563e40dc79413016f2b614ac88e2b92882a390916613b6bd534af7dd2a"
+    },
+    {
+      "name": "respondCreationInteraction",
+      "path": "schemas/respondCreationInteraction.schema.json",
+      "sha256": "25b258c3ad7b4df1519a96d08c7acfcc4a4b50bd7a3b1e739da42d6e27811d54"
+    },
+    {
+      "name": "cancelInitialization",
+      "path": "schemas/cancelInitialization.schema.json",
+      "sha256": "19f3dddc700f5023fbfe7b4ea9a58e1ba17ad090203bab8715284bf011ba53fc"
+    },
+    {
+      "name": "listModels",
+      "path": "schemas/listModels.schema.json",
+      "sha256": "b3ef3dcf16ee061b1d61d57f73d08fffbf63c3a6a372aaaa21ca8067017986a2"
+    },
+    {
+      "name": "getScopedModelCatalog",
+      "path": "schemas/getScopedModelCatalog.schema.json",
+      "sha256": "36b21a5e83e949126f9f9942360db982d064cab4780ce95c6fb9df56580bfd65"
+    },
+    {
+      "name": "listSessions",
+      "path": "schemas/listSessions.schema.json",
+      "sha256": "83e385ed718fa7ff150a274796660962794b0886928f212ed1942d87a44b860f"
+    },
+    {
+      "name": "getSessionState",
+      "path": "schemas/getSessionState.schema.json",
+      "sha256": "3c63742c58ef93ff2bfe96fa0e6e73d9b351be9fe0b0eabb91939311977fa62c"
+    },
+    {
+      "name": "getSessionSnapshot",
+      "path": "schemas/getSessionSnapshot.schema.json",
+      "sha256": "f33a16fb1a99ff0cae88fb6e819a39dc7687e3611939715d0c376a73dd1c298b"
+    },
+    {
+      "name": "resynchronizeSession",
+      "path": "schemas/resynchronizeSession.schema.json",
+      "sha256": "14bcd84d1d9556e03086395667c62614043f2bc9b2e78750f4bab905e463d3e7"
+    },
+    {
+      "name": "getSessionNotices",
+      "path": "schemas/getSessionNotices.schema.json",
+      "sha256": "3c63742c58ef93ff2bfe96fa0e6e73d9b351be9fe0b0eabb91939311977fa62c"
+    },
+    {
+      "name": "getSessionCapabilities",
+      "path": "schemas/getSessionCapabilities.schema.json",
+      "sha256": "3c63742c58ef93ff2bfe96fa0e6e73d9b351be9fe0b0eabb91939311977fa62c"
+    },
+    {
+      "name": "startTurn",
+      "path": "schemas/startTurn.schema.json",
+      "sha256": "362883945797ccd0144a664f1d05a66dc4ed913564d989ef14a1e253397ed281"
+    },
+    {
+      "name": "steerTurn",
+      "path": "schemas/steerTurn.schema.json",
+      "sha256": "2e2e37199df5506c09e26c6246988e195ddd5718469d8ff59ad34047fb661863"
+    },
+    {
+      "name": "interruptSession",
+      "path": "schemas/interruptSession.schema.json",
+      "sha256": "3c63742c58ef93ff2bfe96fa0e6e73d9b351be9fe0b0eabb91939311977fa62c"
+    },
+    {
+      "name": "updateSelections",
+      "path": "schemas/updateSelections.schema.json",
+      "sha256": "6a4d7cbde8d93786dedc004d70d38f29883c69bcf8325be774e1d9ac58c1cf48"
+    },
+    {
+      "name": "respondInteraction",
+      "path": "schemas/respondInteraction.schema.json",
+      "sha256": "a19e36489642a19a8d79b9a3a01952076f70bc5b6fffd4aa04c24923f284d92e"
+    },
+    {
+      "name": "getInteractionResponse",
+      "path": "schemas/getInteractionResponse.schema.json",
+      "sha256": "5efb206ecd83d62c812fddd758f7e8bc8a7fb6cc52c123881439e5e7e8dd2a77"
+    },
+    {
+      "name": "getSessionTree",
+      "path": "schemas/getSessionTree.schema.json",
+      "sha256": "60e8a9b39c818bb2a81686752c57d3f346d3909b9d0f26432225dcd40d6734de"
+    },
+    {
+      "name": "selectExecutionPosition",
+      "path": "schemas/selectExecutionPosition.schema.json",
+      "sha256": "6186935d7b2c107939a890ae78aa5e8cdad1198115ff1fa1825524487007f800"
+    },
+    {
+      "name": "closeSession",
+      "path": "schemas/closeSession.schema.json",
+      "sha256": "77e48a30c5e7f0b65f9ff1442f99296a586d71a8167b9231eb5071a74980ec49"
+    },
+    {
+      "name": "DialogResult",
+      "path": "schemas/DialogResult.schema.json",
+      "sha256": "704738f1c4b29e773efa3d52fab33279ce4e93dcf88348d77c01a13384e018a6"
+    },
+    {
+      "name": "InteractionResponse",
+      "path": "schemas/InteractionResponse.schema.json",
+      "sha256": "ab6db618eef968945aaf468ee9862147012df94c7d648d74167c820a7056b15b"
+    },
+    {
+      "name": "SyncBatch",
+      "path": "schemas/SyncBatch.schema.json",
+      "sha256": "6693281583b59851acd632250617ea8044f8bc8277ad3d588dbb0c141d95a8f6"
+    },
+    {
+      "name": "SyncRequest",
+      "path": "schemas/SyncRequest.schema.json",
+      "sha256": "9842b7b5d3acb2d382c06ccee23a395ec6d41c9386f70d34e1a7c4eff8a87ecc"
+    }
+  ]
+}

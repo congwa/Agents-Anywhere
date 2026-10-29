@@ -1,0 +1,79 @@
+{
+  "name": "@agents-anywhere/pi-execution",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19 <23"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "default": "./lib/src/index.js"
+    },
+    "./model-guard": {
+      "types": "./lib/src/infrastructure/model-guard.d.ts",
+      "default": "./lib/src/infrastructure/model-guard.js"
+    },
+    "./request-profile": {
+      "types": "./lib/src/infrastructure/request-profile.d.ts",
+      "default": "./lib/src/infrastructure/request-profile.js"
+    },
+    "./position": {
+      "types": "./lib/src/infrastructure/position.d.ts",
+      "default": "./lib/src/infrastructure/position.js"
+    },
+    "./projection": {
+      "types": "./lib/src/infrastructure/projection.d.ts",
+      "default": "./lib/src/infrastructure/projection.js"
+    },
+    "./resources": {
+      "types": "./lib/src/infrastructure/resources.d.ts",
+      "default": "./lib/src/infrastructure/resources.js"
+    },
+    "./storage": {
+      "types": "./lib/src/infrastructure/storage.d.ts",
+      "default": "./lib/src/infrastructure/storage.js"
+    },
+    "./shared": {
+      "types": "./lib/src/domain/shared.d.ts",
+      "default": "./lib/src/domain/shared.js"
+    },
+    "./interactions": {
+      "types": "./lib/src/application/interactions.d.ts",
+      "default": "./lib/src/application/interactions.js"
+    },
+    "./dialog-result": {
+      "types": "./lib/src/domain/dialog-result.d.ts",
+      "default": "./lib/src/domain/dialog-result.js"
+    },
+    "./workers": {
+      "types": "./lib/src/infrastructure/workers.d.ts",
+      "default": "./lib/src/infrastructure/workers.js"
+    },
+    "./worker-exit": {
+      "types": "./lib/src/domain/worker-exit.d.ts",
+      "default": "./lib/src/domain/worker-exit.js"
+    },
+    "./worker-entry": {
+      "types": "./lib/src/interfaces/worker.d.ts",
+      "default": "./lib/src/interfaces/worker.js"
+    },
+    "./native-history": {
+      "types": "./lib/src/infrastructure/native-history.d.ts",
+      "default": "./lib/src/infrastructure/native-history.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3"
+  }
+}

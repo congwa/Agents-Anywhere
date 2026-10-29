@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "runtimeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "sessionNamespace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "preparationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "clientPreparationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    }
+  },
+  "required": [
+    "runtimeId",
+    "sessionNamespace",
+    "preparationId",
+    "clientPreparationId",
+    "cwd"
+  ],
+  "additionalProperties": false
+}

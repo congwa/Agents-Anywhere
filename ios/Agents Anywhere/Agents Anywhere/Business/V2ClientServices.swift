@@ -63,7 +63,7 @@ final class V2ClientServices {
             serverURL: api.serverURL
         )
         newSession = NewSessionModel(scope: scope, devices: deviceManagement,
-            preparation: sessionPreparation, creation: sessionCreation, projectAPI: api.projects)
+            preparation: sessionPreparation, creation: sessionCreation, projectAPI: api.projects, workflowAPI: V2RuntimeWorkflowAPI(transport: api.sessions.transport))
         newSession.onProjectResolved = { [weak self] in self?.dashboardRepository.upsertProject($0) }
         newSession.onStaged = { [weak self] submission in
             guard let self else { return }

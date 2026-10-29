@@ -85,6 +85,7 @@ fun NewSessionScreen(
     onListDirectory: suspend (String, String, String) -> Result<NewSessionDirectory>,
     onListRuntimes: suspend (String) -> Result<DeviceRuntimeList>,
     onLoadRuntimeCapabilities: suspend (String, String) -> Result<NewSessionRuntimeCapabilities>,
+    onPrepareRuntimeWorkspace: suspend (String, String, String) -> Result<com.agentsanywhere.app.feature.sessions.PreparedRuntimeWorkspace> = { _, _, _ -> Result.failure(IllegalStateException("工作区准备不可用。")) },
     onLoadModelCatalog: suspend (String, String) -> Result<NewSessionModelCatalog>,
     onLoadPermissionCatalog: suspend (String, String) -> Result<NewSessionPermissionCatalog>,
     onPrepareSession: (NewSessionDraft) -> Unit,
@@ -315,6 +316,10 @@ fun NewSessionScreen(
             keyboard?.hide()
         }
     }
+
+    var preparedRuntimeWorkspace by remember(selectedDevice?.id, selectedRuntime?.id, selectedWorkspacePath, selectedProjectId) { mutableStateOf<com.agentsanywhere.app.feature.sessions.PreparedRuntimeWorkspace?>(null) }
+    var preparingRuntime by remember { mutableStateOf(false) }
+    val needsWorkspacePreparation = runtimeSelection.capabilities.data?.find("runtime.workspace.prepare", selectedRuntime?.id.orEmpty(), selectedRuntime?.type)?.usable == true
 
     suspend fun loadRuntimeDetails() {
         val connectorId = runtimeSelection.connectorId ?: return
@@ -637,6 +642,7 @@ fun NewSessionScreen(
         runtimeSelection.connectorId == selectedDevice.id &&
         selectedRuntime != null &&
         runtimeSelection.readyForCreate &&
+        (!needsWorkspacePreparation || preparedRuntimeWorkspace != null) &&
         workspaceReady &&
         !creatingProject
 
@@ -676,6 +682,7 @@ fun NewSessionScreen(
                 runtimeName = runtime.name,
                 selections = runtimeSelection.selections,
                 attachmentsEnabled = runtimeSelection.canUseAttachments,
+                preparedWorkspace = preparedRuntimeWorkspace,
             ),
         )
     }
@@ -1012,6 +1019,30 @@ fun NewSessionScreen(
                         .padding(start = 18.dp, end = 18.dp, bottom = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                if (needsWorkspacePreparation) TextButton(enabled = !preparingRuntime && selectedDevice != null && selectedRuntime != null, onClick = {
+                    scope.launch {
+                        preparingRuntime = true
+                        try {
+                            val device = selectedDevice ?: return@launch
+                            val runtime = selectedRuntime ?: return@launch
+                            val path = effectiveWorkspacePath
+                            val project = workspaceProject(projects, device.id, path, device.deviceOs)
+                                ?: onCreateProject(workspaceProjectName(path), device.id, path).getOrThrow()
+                            val result = onPrepareRuntimeWorkspace(device.id, runtime.id, project.id).getOrThrow()
+                            if (selectedRuntime?.id == runtime.id && selectedDevice?.id == device.id && effectiveWorkspacePath == path) {
+                                preparedRuntimeWorkspace = result
+                                runtimeSelection.requestKey?.let { runtimeSelection = runtimeSelection.applyModelCatalog(it, result.catalog) }
+                            }
+                        } catch (error: CancellationException) { throw error }
+                        catch (error: Exception) { projectCreateError = error.message }
+                        finally { preparingRuntime = false }
+                    }
+                }) { Text("准备工作区并加载模型") }
+                preparedRuntimeWorkspace?.configurationSchema?.let { schema ->
+                    StructuredAgentFields(org.json.JSONObject(schema), preparedRuntimeWorkspace!!.configurationValues, !preparingRuntime) { key, value ->
+                        preparedRuntimeWorkspace = preparedRuntimeWorkspace?.let { current -> current.copy(configurationValues = if (value == null) current.configurationValues - key else current.configurationValues + (key to value)) }
+                    }
+                }
                 val runtimeError = when {
                     checkingDevices || checkingAgents || inventory.loading -> null
                     onlineDevices.isEmpty() -> stringResource(R.string.new_session_no_online_agent)

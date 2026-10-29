@@ -37,17 +37,22 @@ CONTROL_SERVICE = "aa.local.v2.Control"
 LOGS_SERVICE = "aa.local.v2.Logs"
 DSH_SYNC_SERVICE = "aa.dsh.v2.Sync"
 DSH_BRIDGE_SERVICE = "aa.dsh.v2.Bridge"
+PI_SYNC_SERVICE = "aa.pi.v1.Sync"
+PI_BRIDGE_SERVICE = "aa.pi.v1.Bridge"
+PI_NATIVE_SERVICE = "aa.pi.v1.NativeAttach"
 REGISTRY_SERVICE = "meshcall.router.v1.Registry"
 
 HOST_ROLE = "host"
 CONNECTOR_ROLE = "connector"
 DSH_BRIDGE_ROLE = "dsh-bridge"
+PI_HOST_ROLE = "pi-host"
+PI_NATIVE_ROLE = "pi-native"
 
 # register: services the role may serve; call: service/method rules.
 ROLE_PERMISSIONS: dict[str, dict[str, list[str]]] = {
     CONNECTOR_ROLE: {
-        "register": [CONTROL_SERVICE, LOGS_SERVICE, DSH_SYNC_SERVICE],
-        "call": [f"{DSH_BRIDGE_SERVICE}/*", f"{REGISTRY_SERVICE}/*"],
+        "register": [CONTROL_SERVICE, LOGS_SERVICE, DSH_SYNC_SERVICE, PI_SYNC_SERVICE],
+        "call": [f"{DSH_BRIDGE_SERVICE}/*", f"{PI_BRIDGE_SERVICE}/*", f"{REGISTRY_SERVICE}/*"],
     },
     # The Registry lets `meshcall router inspect` / `call` describe the services.
     HOST_ROLE: {
@@ -57,6 +62,14 @@ ROLE_PERMISSIONS: dict[str, dict[str, list[str]]] = {
     DSH_BRIDGE_ROLE: {
         "register": [DSH_BRIDGE_SERVICE],
         "call": [f"{DSH_SYNC_SERVICE}/*", *[f"{LOGS_SERVICE}/{method}" for method in ("write", "read", "tail")]],
+    },
+    PI_HOST_ROLE: {
+        "register": [PI_BRIDGE_SERVICE, PI_NATIVE_SERVICE],
+        "call": [f"{PI_SYNC_SERVICE}/*"],
+    },
+    PI_NATIVE_ROLE: {
+        "register": [],
+        "call": [f"{PI_NATIVE_SERVICE}/*"],
     },
 }
 
