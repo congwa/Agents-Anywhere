@@ -264,9 +264,23 @@ class CodexRuntime(AgentRuntime):
                 read_model_catalog=self._ipc_model_catalog,
                 read_permission_catalog=self._ipc_permission_catalog,
                 apply_selections=self._turns.update_session_selections,
+                read_goal=self._ipc_thread_goal,
             )
         if self.ipc_owner is not None:
             self.ipc_owner.attach()
+
+    async def _ipc_thread_goal(self, thread_id: str) -> dict[str, Any] | None:
+        if self.goals is None:
+            return None
+        from openai_codex import JsonRpcError, MethodNotFoundError, TransportClosedError
+
+        try:
+            reply = await self.goals.port.request("thread/goal/get", thread_id)
+        except MethodNotFoundError:
+            return None  # Older app-servers do not implement goals.
+        except (JsonRpcError, TransportClosedError) as exc:
+            raise RuntimeError(f"goal read failed: {exc}") from exc
+        return reply.get("goal")
 
     def _ipc_session_id_for(self, thread_id: str) -> str:
         cached = self._session_states.get_by_external_session_id(thread_id)
@@ -1240,10 +1254,14 @@ class CodexRuntime(AgentRuntime):
                 except ValueError:
                     pass  # A late native event cannot revive an explicitly deleted AA session.
         if self.ipc_owner is not None:
-            try:
-                thread_id = notification_event(message).thread_id
-            except Exception:  # noqa: BLE001 - best effort republish trigger
-                thread_id = None
+            # Goal notifications may be unknown to the installed SDK. Their
+            # raw threadId still identifies the owner snapshot to republish.
+            thread_id = params.get("threadId")
+            if not isinstance(thread_id, str) or not thread_id:
+                try:
+                    thread_id = notification_event(message).thread_id
+                except Exception:  # noqa: BLE001 - best effort republish trigger
+                    thread_id = None
             if thread_id:
                 self.ipc_owner.notify_thread(thread_id)
 

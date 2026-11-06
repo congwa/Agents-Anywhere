@@ -79,6 +79,7 @@ IsFollowedElsewhere = Callable[[str], bool]
 SessionIdFor = Callable[[str], str]
 Clock = Callable[[], float]
 ApplySelections = Callable[[str, str, Mapping[str, str | None]], Awaitable[Any]]
+GoalReader = Callable[[str], Awaitable[Mapping[str, Any] | None]]
 
 
 @dataclass(slots=True)
@@ -96,6 +97,8 @@ class CodexIpcOwnerService:
     read_model_catalog: ModelCatalogReader | None = None
     read_permission_catalog: PermissionCatalogReader | None = None
     apply_selections: ApplySelections | None = None
+    read_goal: GoalReader | None = None
+    _thread_goals: dict[str, dict[str, Any] | None] = field(default_factory=dict, init=False)
     followers: dict[str, set[str]] = field(default_factory=dict, init=False)
     revisions: dict[str, int] = field(default_factory=dict, init=False)
     # Follow-ups a window queued on a thread AA owns. A follower window never
@@ -265,6 +268,7 @@ class CodexIpcOwnerService:
         session_id = self.session_id_for(thread_id)
         state = self.session_states.get(session_id)
         model, permission = await self._settings_from_selections(state)
+        goal = await self._read_thread_goal(thread_id)
         return conversation_state_from_thread(
             raw_thread,
             thread_id=thread_id,
@@ -275,7 +279,25 @@ class CodexIpcOwnerService:
             model_settings=model,
             permission_settings=permission,
             collaboration_mode=getattr(self.sdk, "_planning_modes", {}).get(thread_id),
+            thread_goal=goal,
         )
+
+    async def _read_thread_goal(self, thread_id: str) -> dict[str, Any] | None:
+        if self.read_goal is None:
+            return None
+        try:
+            async with asyncio.timeout(2):
+                goal = await self.read_goal(thread_id)
+            self._thread_goals[thread_id] = dict(goal) if goal is not None else None
+        except (RuntimeError, TimeoutError, ValueError, TypeError) as exc:
+            logger.warning("codex ipc owner goal read failed thread={} error={}", thread_id, exc)
+            # Only a successful native read returning null can clear a goal.
+            # With no previous observation, defer the snapshot rather than
+            # telling a follower that an unknown goal is absent.
+            if thread_id not in self._thread_goals:
+                raise
+        goal = self._thread_goals[thread_id]
+        return dict(goal) if goal is not None else None
 
     async def _settings_from_selections(
         self, state: SessionState | None
@@ -756,6 +778,7 @@ def conversation_state_from_thread(
     model_settings: CodexModelSettings | None = None,
     permission_settings: CodexPermissionSettings | None = None,
     collaboration_mode: Mapping[str, Any] | None = None,
+    thread_goal: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a v11-shaped ``conversationState`` from app-server thread data.
 
@@ -855,7 +878,7 @@ def conversation_state_from_thread(
         "shellEnvironmentPolicy": None,
         "boundedCloudHistory": None,
         "canonicalVoiceHistory": None,
-        "threadGoal": None,
+        "threadGoal": dict(thread_goal) if thread_goal is not None else None,
         "threadGoalResumeConfirmation": None,
         "ownerNote": STATE_VERSION_NOTE,
     }

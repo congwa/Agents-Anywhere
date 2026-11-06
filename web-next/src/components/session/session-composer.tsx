@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { ComposerModeBadge } from "@/components/session/composer-mode-badge"
+import { ComposerCommandMenu } from "@/components/session/composer-command-menu"
 import { parsePlanningCommand } from "@/features/planning/commands"
 import { ArrowUp, Check, ChevronDown, Loader2, Square, X } from "lucide-react"
 import { toast } from "sonner"
@@ -659,6 +661,15 @@ export function SessionComposer({
     )
   }
 
+  const modeBadge = goalMode ? (
+    <ComposerModeBadge
+      mode="goal"
+      label={tGoal("title")}
+      closeLabel={tGoal("clearMode")}
+      onClose={() => { setGoalMode(false); textareaRef.current?.focus() }}
+    />
+  ) : null
+
   return (
     <div
       className="shrink-0 px-4 pb-4 pt-2"
@@ -667,7 +678,6 @@ export function SessionComposer({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      {goalMode && <Badge variant="outline">{tGoal("title")}<Button type="button" variant="ghost" size="icon-sm" aria-label={tGoal("clearMode")} onClick={()=>setGoalMode(false)}><X/></Button></Badge>}
       <DragOverlay isDragging={isDragging} />
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
         {commandFeedback ? (
@@ -703,44 +713,20 @@ export function SessionComposer({
             </div>
           ) : null}
           {showCommandMenu ? (
-            <div
+            <ComposerCommandMenu
               id={commandMenuId}
-              role="listbox"
-              aria-label={tSession("commandMenu")}
-              className="absolute inset-x-0 bottom-full z-30 mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
-              onMouseDown={(event) => event.preventDefault()}
+              label={tSession("commandMenu")}
+              items={commandSuggestions.map((command) => {
+                const block = blockOf(command)
+                const ui = commandUi(command)
+                return { id: command.id, hint: ui?.kind === "execute" ? ui.argumentHint : undefined,
+                  disabled: block !== null, description: block ? blockMessage(command, block) : commandDescription(command) }
+              })}
+              activeIndex={highlightedCommand ? commandSuggestions.indexOf(highlightedCommand) : 0}
+              onHighlight={setActiveCommandIndex}
+              onChoose={(id) => { const command = commandSuggestions.find((item) => item.id === id); if (command) chooseCommand(command) }}
             >
-              {commandSuggestions.length > 0 ? (
-                commandSuggestions.map((command, index) => {
-                  const block = blockOf(command)
-                  const ui = commandUi(command)
-                  const hint = ui?.kind === "execute" ? ui.argumentHint : undefined
-                  const highlighted = command === highlightedCommand
-                  return (
-                    <button
-                      key={command.id}
-                      id={`${commandMenuId}-${index}`}
-                      type="button"
-                      role="option"
-                      aria-selected={highlighted}
-                      aria-disabled={block !== null}
-                      className={cn(
-                        "flex w-full items-baseline gap-3 rounded-lg px-3 py-2 text-left",
-                        highlighted && "bg-accent text-accent-foreground",
-                      )}
-                      onMouseEnter={() => setActiveCommandIndex(index)}
-                      onClick={() => chooseCommand(command)}
-                    >
-                      <span className={cn("code-mono shrink-0 text-xs", block ? "text-muted-foreground" : "text-primary")}>
-                        /{command.id}{hint ? <span className="text-muted-foreground"> {hint}</span> : null}
-                      </span>
-                      <span className={cn("min-w-0 flex-1 truncate text-xs", block ? "text-muted-foreground/80" : "text-muted-foreground")}>
-                        {block ? blockMessage(command, block) : commandDescription(command)}
-                      </span>
-                    </button>
-                  )
-                })
-              ) : commandsError ? (
+              {commandsError ? (
                 <div role="alert" className="px-3 py-2 text-xs text-destructive">{tSession("commandCatalogError")}</div>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
@@ -748,7 +734,7 @@ export function SessionComposer({
                   {tSession("commandLoading")}
                 </div>
               )}
-            </div>
+            </ComposerCommandMenu>
           ) : null}
           {isDragging ? (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/75 text-sm font-medium text-foreground backdrop-blur-sm">
@@ -885,6 +871,7 @@ export function SessionComposer({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}
+                {modeBadge}
                 {modelItems.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -920,6 +907,7 @@ export function SessionComposer({
                 </>
               )
             ) : null}
+            {!hasSelectors || compactSelectors ? modeBadge : null}
             <div
               role="switch"
               aria-checked={session.takeover}

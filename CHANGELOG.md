@@ -10,7 +10,7 @@
 
 ### Codex 与 Claude
 
-- Web、Desktop、Android 和 iOS 可用 `/goal` 设置目标，在输入区上方编辑、暂停、恢复或清除；停止时阻止自动续跑，完成结果留在会话历史中，长目标栏与输入框保持同宽并自动截断正文。（[#539](https://github.com/anywhere-labs/Agents-Anywhere/pull/539)）
+- Web、Desktop、Android 和 iOS 可用 `/goal` 设置目标，在输入区上方编辑、暂停、恢复或清除；停止时阻止自动续跑，完成结果留在会话历史中；Anywhere 持有的 Codex 会话在 Codex 桌面查看时同步显示原生目标及状态变化，读取暂时失败时保留上次确认的目标，长目标栏与输入框保持同宽并自动截断正文；Web 和 Desktop 新会话输入 `/` 时可从与会话内一致的命令菜单选择 `/goal` 或 `/plan`，「计划」「目标」输入模式标签移至底部权限选项旁，悬停或键盘聚焦时显示关闭按钮，触摸设备直接显示；退出输入模式保留草稿和附件。（[#539](https://github.com/anywhere-labs/Agents-Anywhere/pull/539)）
 
 ## 2.2.0（日期待定）
 

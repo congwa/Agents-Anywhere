@@ -7,8 +7,11 @@ import { RuntimeCreationStatus } from "@/components/session/runtime-creation-sta
 import { creationConfigurationDefaults } from "@/features/dashboard/runtime-forms"
 
 import * as React from "react"
+import { ComposerModeBadge } from "@/components/session/composer-mode-badge"
+import { ComposerCommandMenu, type ComposerCommandItem } from "@/components/session/composer-command-menu"
+import { parseSlashIntent, commandLikeToken } from "@/components/session/runtime-command-model"
 import { parsePlanningCommand } from "@/features/planning/commands"
-import { X, Monitor, ChevronDown, ArrowUp, Loader2, Check } from "lucide-react"
+import { Monitor, ChevronDown, ArrowUp, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -150,6 +153,7 @@ export function TaskComposer() {
   const t = useTranslations("dashboard.new")
   const tPlanning = useTranslations("planning")
   const tGoal = useTranslations("goal")
+  const tSession = useTranslations("dashboard.session")
   const [goalCreation,setGoalCreation]=React.useState(Boolean(creationEditorDraft?.request.goalIntent))
   const errorText = useRuntimeErrorText()
   const tCommon = useTranslations("common")
@@ -257,6 +261,10 @@ export function TaskComposer() {
   const [permissionRefreshKey, setPermissionRefreshKey] = React.useState(0)
   const [workspace, setWorkspace] = React.useState<WorkspaceSelection | null>(creationEditorDraft?.workspace ?? null)
   const [projectEditor, setProjectEditor] = React.useState<ProjectEditorState>(null)
+  const commandMenuId = React.useId()
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  const [activeCommandIndex, setActiveCommandIndex] = React.useState(0)
+  const [menuDismissedFor, setMenuDismissedFor] = React.useState<string | null>(null)
   const [prompt, setPrompt] = React.useState(creationEditorDraft?.prompt ?? "")
   const [modelCatalog, setModelCatalog] = React.useState<ProtocolModelCatalog | null>(null)
   const [permissionCatalog, setPermissionCatalog] = React.useState<ProtocolPermissionCatalog | null>(null)
@@ -790,6 +798,28 @@ export function TaskComposer() {
   const preparingWorkspace = needsPreparation && workspace?.path && !preparationNeedsAttention && preparationPhase !== "ready"
   const compactSelectors = composerWidth > 0 && composerWidth < 640
 
+  const creationCommands: ComposerCommandItem[] = []
+  const creationModeAvailable = capabilitiesReady && selectedConnector?.status === "online" && !needsPreparation
+  if (creationModeAvailable && capabilityIsUsable(runtimeCapabilities, "session.goal", selectedRuntimeScope)) {
+    creationCommands.push({ id: "goal", hint: tGoal("objective"), description: tGoal("commandDescription") })
+  }
+  if (creationModeAvailable && capabilityIsUsable(runtimeCapabilities, CAPABILITY.planning, selectedRuntimeScope)) {
+    creationCommands.push({ id: "plan", hint: tPlanning("commandHint"), description: tPlanning("commandDescription") })
+  }
+  const slashIntent = parseSlashIntent(prompt)
+  const commandSuggestions = slashIntent && commandLikeToken(slashIntent) && slashIntent.suffix === ""
+    ? creationCommands.filter((command) => command.id.startsWith(slashIntent.command)) : []
+  const showCommandMenu = commandSuggestions.length > 0 && attachments.length === 0 && !creating && menuDismissedFor !== prompt
+  const highlightedCommandIndex = Math.min(activeCommandIndex, Math.max(0, commandSuggestions.length - 1))
+  const chooseCreationCommand = (id: string) => {
+    if (!commandSuggestions.some((command) => command.id === id)) return
+    setGoalCreation(id === "goal")
+    setPlanningCreation(id === "plan")
+    setPrompt("")
+    setActiveCommandIndex(0)
+    textareaRef.current?.focus()
+  }
+
   const handleCreate = async () => {
     const planIntent = parsePlanningCommand(prompt)
     if (planIntent && planIntent.command !== "submit_task") {
@@ -1011,6 +1041,20 @@ export function TaskComposer() {
     )
   }
 
+  const modeBadge = goalCreation || planningCreation ? (
+    <ComposerModeBadge
+      mode={goalCreation ? "goal" : "plan"}
+      label={goalCreation ? tGoal("title") : tPlanning("creationIntent")}
+      closeLabel={goalCreation ? tGoal("clearMode") : tPlanning("clearMode")}
+      disabled={creating}
+      onClose={() => {
+        if (goalCreation) setGoalCreation(false)
+        else setPlanningCreation(false)
+        textareaRef.current?.focus()
+      }}
+    />
+  ) : null
+
   return (
     <div
       className="relative flex flex-1 flex-col items-center justify-center px-6"
@@ -1041,8 +1085,18 @@ export function TaskComposer() {
         {preparingWorkspace ? <p role="status" className="mb-3 text-sm text-muted-foreground">{tCommon("loading")}</p> : null}
         <div
           ref={composerRef}
-          className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+          className="relative rounded-2xl border border-border bg-card shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
         >
+          {showCommandMenu ? (
+            <ComposerCommandMenu
+              id={commandMenuId}
+              label={tSession("commandMenu")}
+              items={commandSuggestions}
+              activeIndex={highlightedCommandIndex}
+              onHighlight={setActiveCommandIndex}
+              onChoose={chooseCreationCommand}
+            />
+          ) : null}
           <div className="flex flex-col gap-3 px-5 pt-4">
             {creationEditorDraft ? (
               <div className="flex items-center justify-between gap-2">
@@ -1055,15 +1109,34 @@ export function TaskComposer() {
               </div>
             ) : null}
             {recoveryTargetUnavailable ? <p role="alert" className="text-sm text-destructive">{t("restoredTargetUnavailable")}</p> : null}
-            {goalCreation && <Badge variant="outline">{tGoal("title")}<Button type="button" size="icon-sm" variant="ghost" aria-label={tGoal("clearMode")} onClick={()=>setGoalCreation(false)}><X/></Button></Badge>}
-            {planningCreation && <Badge variant="outline">{tPlanning("creationIntent")}</Badge>}
             <AttachmentPreviewList attachments={attachments} onRemove={remove} />
             {attachmentError ? <p role="alert" className="text-xs text-destructive">{attachmentError}</p> : null}
             <Textarea
+              ref={textareaRef}
               value={prompt}
-              onChange={(event) => setPrompt(event.currentTarget.value)}
+              aria-autocomplete="list"
+              aria-controls={showCommandMenu ? commandMenuId : undefined}
+              aria-expanded={showCommandMenu}
+              aria-activedescendant={showCommandMenu ? `${commandMenuId}-${highlightedCommandIndex}` : undefined}
+              onBlur={() => setMenuDismissedFor(prompt)}
+              onFocus={() => setMenuDismissedFor(null)}
+              onChange={(event) => { setPrompt(event.currentTarget.value); setActiveCommandIndex(0); setMenuDismissedFor(null) }}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing) return
+                if (showCommandMenu) {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault()
+                    setActiveCommandIndex((highlightedCommandIndex + (event.key === "ArrowDown" ? 1 : -1) + commandSuggestions.length) % commandSuggestions.length)
+                    return
+                  }
+                  if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+                    event.preventDefault()
+                    const command = commandSuggestions[highlightedCommandIndex]
+                    if (command) chooseCreationCommand(command.id)
+                    return
+                  }
+                  if (event.key === "Escape") { event.preventDefault(); setMenuDismissedFor(prompt); return }
+                }
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault()
                   handleCreate()
@@ -1181,6 +1254,8 @@ export function TaskComposer() {
                       </DropdownMenuContent>
                     </DropdownMenu> : null}
 
+                    {modeBadge}
+
                     {hasOnlineDevice && models.length > 0 ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1210,6 +1285,8 @@ export function TaskComposer() {
                 ) : null}
               </>
             )}
+
+            {compactSelectors || selectorsLoading ? modeBadge : null}
 
             {showCatalogStatus ? (
               <div className="flex min-w-0 items-center gap-1">
