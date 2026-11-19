@@ -23,6 +23,8 @@ from agent_server.core.device_meshcall import (
     DEVICE_MESHCALL_VERSION,
     MESH_MAX_FRAME_BYTES,
     AttachmentConsumedOut,
+    CollabGrantOut,
+    CollabSupervisionOut,
     CommandResultOut,
     DesiredState,
     LinkHello,
@@ -118,6 +120,8 @@ class DeviceLinkService:
         self.commands: Any | None = None
         # ``DeviceBlobService.consumed``: drops the staged copy of a file the device stored.
         self.attachment_consumed: Any | None = None
+        # ``services.agent_collab.CollabService``: supervision edges, grants, session origin and target signals.
+        self.collab: Any | None = None
         self._reconcile_tasks: set[asyncio.Task[Any]] = set()
         hub.on_outbox = self.handle_outbox
         hub.on_event = self.handle_event
@@ -193,7 +197,12 @@ class DeviceLinkService:
         )
         desired = DesiredState(
             runtimes=await self._desired_runtimes(device_id),
-            deviceSettings=await self._store.get_connector_device_settings(device_id),
+            # The device's own settings and the account's agent collaboration settings (``agentCollaboration``).
+            deviceSettings=(
+                await self.collab.desired_device_settings(device_id)
+                if self.collab is not None
+                else await self._store.get_connector_device_settings(device_id)
+            ),
         )
         pending: list[PendingCommand] = []
         for row in await self._store.unsettled_device_commands(device_id):
@@ -334,6 +343,14 @@ class DeviceLinkService:
                 await self._attachment_consumed(device_id, consumed)
             elif item.m == "usage.report":
                 await self._record_usage(device_id, UsageReportOut.model_validate(item.p))
+            elif item.m == "collab.supervision.changed":
+                message = CollabSupervisionOut.model_validate(item.p)
+                if self.collab is not None:
+                    await self.collab.supervision_changed(device_id, message)
+            elif item.m == "collab.grant.changed":
+                grant = CollabGrantOut.model_validate(item.p)
+                if self.collab is not None:
+                    await self.collab.grant_changed(device_id, grant)
             else:
                 logger.warning("unknown outbox message device_id={} m={} oid={}", device_id, item.m, item.oid)
         except ValidationError as exc:
@@ -383,9 +400,10 @@ class DeviceLinkService:
                 title=display.get("title") if isinstance(display.get("title"), str) else None,
                 cwd=display.get("cwd") if isinstance(display.get("cwd"), str) else None,
                 last_activity_at=summary.lastActivityAt,
-                # Required mode: the working directory is sealed, so a new session is placed by the
-                # reported ``projectId`` or stays unplaced until a client assigns it (contracts/e2ee/1.0).
-                project_id=summary.projectId if required else None,
+                # Agent-created sessions already have a selected project and are controlled by their
+                # Connector. Apply that only on insert so a person's later release still wins.
+                project_id=summary.projectId if required or summary.origin is not None else None,
+                initial_takeover=summary.origin is not None,
                 allow_unplaced=required,
             )
         except (KeyError, ValueError) as exc:
@@ -400,7 +418,13 @@ class DeviceLinkService:
                 exc,
             )
             return
+        # Supervised sessions: the signalled fields before the summary, to signal only a change.
+        before = await self.collab.before_summary(session.id) if self.collab is not None else None
         changed = await self._store.apply_device_session_summary(session.id, summary, accept_display=accepted)
+        if self.collab is not None:
+            if summary.origin is not None:
+                await self.collab.summary_origin(session.id, summary.origin)
+            self.collab.after_summary(session.id, before)
         # The device is the only observer of its native records: what it reports is the state, including a
         # record that is ``available`` again after it was missing (the client's warning then goes away).
         if summary.sourceAvailability != session.sourceAvailability:
@@ -586,6 +610,8 @@ class DeviceLinkService:
                 await listener(device_id, online)
             except Exception:  # noqa: BLE001 - listeners never break the link
                 logger.exception("device presence listener failed device_id={}", device_id)
+        if self.collab is not None:
+            self.collab.on_presence(device_id, online)
         if self.session_watch is not None:
             try:
                 await self.session_watch.on_presence(device_id, online)

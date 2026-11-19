@@ -12,6 +12,11 @@
     },
     {
       "bare": true,
+      "id": "connector.a2a",
+      "prefix": "/api/v2/connectors/{connector_id}/a2a"
+    },
+    {
+      "bare": true,
       "id": "connector.fs",
       "prefix": "/api/v2/connectors/{connector_id}/fs"
     },
@@ -49,6 +54,7 @@
   },
   "routes": [
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -65,6 +71,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": "clientMessageId",
       "decorate": [
         "session"
@@ -83,6 +90,7 @@
       "writesCommandId": true
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -99,6 +107,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -115,6 +124,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [
         "session",
@@ -135,6 +145,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -151,6 +162,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -167,6 +179,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -183,6 +196,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -199,6 +213,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -215,6 +230,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -231,6 +247,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -247,6 +264,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [
         "channelCatalog"
@@ -265,6 +283,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -281,6 +300,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -297,6 +317,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -313,6 +334,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -329,6 +351,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -345,6 +368,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -361,6 +385,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -377,6 +402,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -393,6 +419,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": "clientMessageId",
       "decorate": [],
       "e2ee": "channel",
@@ -409,6 +436,7 @@
       "writesCommandId": true
     },
     {
+      "agent": true,
       "commandId": "clientMessageId",
       "decorate": [],
       "e2ee": "channel",
@@ -425,6 +453,7 @@
       "writesCommandId": true
     },
     {
+      "agent": true,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -441,6 +470,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": "responseId",
       "decorate": [],
       "e2ee": "channel",
@@ -457,6 +487,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -473,6 +504,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",
@@ -489,6 +521,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -505,6 +538,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",
@@ -521,6 +555,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",
@@ -537,6 +572,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -553,6 +589,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -569,6 +606,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -585,6 +623,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -601,6 +640,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -617,6 +657,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -633,6 +674,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -649,6 +691,58 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
+      "commandId": null,
+      "decorate": [],
+      "e2ee": "channel",
+      "forward": null,
+      "id": "session.collab.get",
+      "kind": "read",
+      "method": "GET",
+      "offline": false,
+      "owner": "device",
+      "path": "/api/v2/sessions/{session_id}/collab",
+      "sealedUpload": false,
+      "timeout": "read",
+      "via": "call",
+      "writesCommandId": false
+    },
+    {
+      "agent": false,
+      "commandId": "operationId",
+      "decorate": [],
+      "e2ee": "channel",
+      "forward": null,
+      "id": "session.collab.supervise",
+      "kind": "command",
+      "method": "POST",
+      "offline": false,
+      "owner": "device",
+      "path": "/api/v2/sessions/{session_id}/collab/supervisions",
+      "sealedUpload": false,
+      "timeout": "command",
+      "via": "call",
+      "writesCommandId": true
+    },
+    {
+      "agent": false,
+      "commandId": "operationId",
+      "decorate": [],
+      "e2ee": "channel",
+      "forward": null,
+      "id": "session.collab.supervision.update",
+      "kind": "command",
+      "method": "PATCH",
+      "offline": false,
+      "owner": "device",
+      "path": "/api/v2/sessions/{session_id}/collab/supervisions/{supervision_id}",
+      "sealedUpload": false,
+      "timeout": "command",
+      "via": "call",
+      "writesCommandId": true
+    },
+    {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -665,6 +759,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -681,6 +776,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -697,6 +793,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -713,6 +810,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -729,6 +827,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -745,6 +844,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -761,6 +861,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -777,6 +878,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -793,6 +895,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -809,6 +912,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -825,6 +929,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -841,6 +946,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -857,6 +963,41 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
+      "commandId": null,
+      "decorate": [],
+      "e2ee": "channel",
+      "forward": null,
+      "id": "connector.a2a.card",
+      "kind": "read",
+      "method": "GET",
+      "offline": false,
+      "owner": "device",
+      "path": "/api/v2/connectors/{connector_id}/a2a/agent-card.json",
+      "sealedUpload": false,
+      "timeout": "read",
+      "via": "call",
+      "writesCommandId": false
+    },
+    {
+      "agent": true,
+      "commandId": null,
+      "decorate": [],
+      "e2ee": "channel",
+      "forward": null,
+      "id": "connector.a2a.review",
+      "kind": "critical",
+      "method": "POST",
+      "offline": false,
+      "owner": "device",
+      "path": "/api/v2/connectors/{connector_id}/a2a/review",
+      "sealedUpload": false,
+      "timeout": "long",
+      "via": "call",
+      "writesCommandId": false
+    },
+    {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -873,6 +1014,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -889,6 +1031,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -905,6 +1048,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -921,6 +1065,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -937,6 +1082,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -953,6 +1099,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -969,6 +1116,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -985,6 +1133,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1001,6 +1150,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1017,6 +1167,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1033,6 +1184,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1049,6 +1201,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1065,6 +1218,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1081,6 +1235,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1097,6 +1252,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1113,6 +1269,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1129,6 +1286,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1145,6 +1303,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1161,6 +1320,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1177,6 +1337,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1193,6 +1354,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1209,6 +1371,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1225,6 +1388,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1241,6 +1405,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1257,6 +1422,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1273,6 +1439,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1289,6 +1456,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1305,6 +1473,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [
         "channelCatalog"
@@ -1323,6 +1492,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -1339,6 +1509,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "plain",
@@ -1355,6 +1526,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1371,6 +1543,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1387,6 +1560,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1403,6 +1577,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1419,6 +1594,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1435,6 +1611,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1451,6 +1628,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -1467,6 +1645,7 @@
       "writesCommandId": false
     },
     {
+      "agent": true,
       "commandId": "commandId",
       "decorate": [],
       "e2ee": "channel",
@@ -1483,6 +1662,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": null,
       "decorate": [],
       "e2ee": "channel",
@@ -1499,6 +1679,7 @@
       "writesCommandId": false
     },
     {
+      "agent": false,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",
@@ -1515,6 +1696,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",
@@ -1531,6 +1713,7 @@
       "writesCommandId": true
     },
     {
+      "agent": false,
       "commandId": "operationId",
       "decorate": [],
       "e2ee": "channel",

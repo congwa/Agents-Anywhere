@@ -821,7 +821,7 @@ class SessionCreateAndStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     connectorId: str
-    projectId: str = Field(min_length=1)
+    projectId: str | None = Field(default=None, min_length=1)
     runtime: RuntimeName = "codex"
     runtimeId: str | None = None
     title: str | None = None
@@ -831,6 +831,8 @@ class SessionCreateAndStartRequest(BaseModel):
     planningIntent: PlanningCreationIntent | None = None
     goalIntent: GoalCreationIntent | None = None
     runtimeOptions: dict[str, Any] = Field(default_factory=dict, max_length=16)
+    collaborationCheckout: dict[str, Any] | None = Field(default=None, max_length=5)
+    originDepth: int | None = Field(default=None, ge=1, le=8)
     attachments: list[InlineAttachmentRef] = Field(default_factory=list, max_length=10)
     clientMessageId: str | None = None
 
@@ -904,6 +906,12 @@ class SessionView(BaseModel):
     displayUser: dict[str, Any] | None = None
     planState: str = "none"
     goalState: str = "none"
+    # Agent collaboration (``SessionViewV12``): who created the session when an Agent did
+    # (``device_meshcall.SessionOrigin``), and its supervision edges that have not ended
+    # (``protocol_v1_2.SupervisionEdge``): as the target (``supervisors``) and as the supervisor (``supervised``).
+    origin: dict[str, Any] | None = None
+    supervisors: list[dict[str, Any]] = Field(default_factory=list)
+    supervised: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _normalize_runtime_identity(self) -> SessionView:

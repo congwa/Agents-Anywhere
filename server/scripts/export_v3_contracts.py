@@ -147,6 +147,11 @@ DEVICE_MESHCALL = Contract(
         _a("device-settings-apply-result", dl.DeviceSettingsApplyResult),
         _a("preview-open-result", dl.PreviewOpenResult),
         _a("preview-close-result", dl.PreviewCloseResult),
+        # Agent collaboration
+        _a("collab-signal-command", dl.CollabSignalCommand),
+        _a("collab-signal-result", dl.CollabSignalResult),
+        _a("collab-supervision-out", dl.CollabSupervisionOut),
+        _a("collab-grant-out", dl.CollabGrantOut),
         # Client service
         _a("client-call-request", dl.ClientCallRequest),
         _a("client-call-item", dl.ClientCallItem),
@@ -173,6 +178,9 @@ E2EE = Contract(
         _a("approve-client-request", e2ee.ApproveClientRequest),
         _a("revoke-client-request", e2ee.RevokeClientRequest),
         _a("trust-list-response", e2ee.TrustListResponse),
+        _a("agent-identity-response", e2ee.AgentIdentityResponse),
+        _a("peer-pin-request", e2ee.PeerPinRequest),
+        _a("peer-list-response", e2ee.PeerListResponse),
         _a("client-tunnel-frame", e2ee.ClientTunnelFrame),
         _a("client-tunnel-end", e2ee.ClientTunnelEnd),
         _a("tunnel-request", e2ee.TunnelRequest),
@@ -232,6 +240,8 @@ PROTOCOL_1_2 = Contract(
         _a("session-queue-state", p12.SessionQueueStateV12, "egress"),
         _a("display-user-update-request", p12.DisplayUserUpdateRequest, "ingress"),
         _a("session-blob-chunk", p12.SessionBlobChunk, "egress"),
+        _a("message-author", p12.MessageAuthor, "egress"),
+        _a("supervision-edge", p12.SupervisionEdge, "egress"),
     ),
 )
 
@@ -468,6 +478,7 @@ def render_client_routes() -> dict[str, Any]:
             "decorate": list(route.decorate),
             "e2ee": route.e2ee,
             "sealedUpload": route.sealed_upload,
+            "agent": route.agent,
             "forward": route.forward,
         }
         for route in cr.CLIENT_ROUTES

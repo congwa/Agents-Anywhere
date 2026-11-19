@@ -2,6 +2,9 @@
 /** Generated from contracts/device-meshcall/1.0 artifact client-call-request. Do not edit; run `yarn contracts:generate`. */
 
 export type Bytebudget = number | null
+export type Deviceid = string
+export type Grantid = string
+export type Sessionid = string
 export type Clientid = string | null
 export type Platform = string | null
 export type Userid = string
@@ -43,12 +46,17 @@ export type Route =
   | "session.runtime.queue.delete"
   | "session.runtime.queue.retry"
   | "session.runtime.queue.sendNow"
+  | "session.collab.get"
+  | "session.collab.supervise"
+  | "session.collab.supervision.update"
   | "session.blobs.read"
   | "session.terminals.create"
   | "session.terminals.list"
   | "session.terminals.close"
   | "session.terminals.rename"
   | "session.terminals.resize"
+  | "connector.a2a.card"
+  | "connector.a2a.review"
   | "connector.fs.list"
   | "connector.fs.readText"
   | "connector.fs.write"
@@ -99,7 +107,7 @@ export type Root = string
 /**
  * create-and-start: the directory row the Server created
  */
-export type Sessionid = string | null
+export type Sessionid1 = string | null
 export type Takeover = boolean | null
 /**
  * the URL the client downloads from (a preview download carries its previewAccessToken); default the device's own fs/transfers route
@@ -132,9 +140,19 @@ export interface Body {
  * Who sent the request, as the Server authenticated it.
  */
 export interface ClientCaller {
+  agent?: AgentCaller | null
   clientId?: Clientid
   platform?: Platform
   userId: Userid
+  [k: string]: unknown
+}
+/**
+ * The supervisor session a delegated request acts for (``ClientCaller.agent``).
+ */
+export interface AgentCaller {
+  deviceId: Deviceid
+  grantId: Grantid
+  sessionId: Sessionid
   [k: string]: unknown
 }
 /**
@@ -159,7 +177,7 @@ export interface ClientServerFacts {
    * a preview read: the file its token opened
    */
   preview?: ClientPreview | null
-  sessionId?: Sessionid
+  sessionId?: Sessionid1
   takeover?: Takeover
   /**
    * fs/read: where the device PUTs the bytes
